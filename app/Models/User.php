@@ -7,6 +7,8 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -54,6 +56,28 @@ class User extends Authenticatable
     public function getAuthPasswordName()
     {
         return 'u_password_hash';
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Roles::class, 'u_role_id', 'ro_id');
+    }
+
+    public function isAdmin(): bool
+    {
+        return strcasecmp((string) $this->role?->ro_name, 'ADMIN') === 0;
+    }
+
+    public function ranges(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Ranges::class,
+            'user_range_access',
+            'ura_user_id',
+            'ura_range_id',
+            'u_id',
+            'rn_id'
+        );
     }
 
     /**
