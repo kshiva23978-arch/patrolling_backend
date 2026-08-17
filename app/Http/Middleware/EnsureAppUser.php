@@ -13,7 +13,7 @@ class EnsureAppUser
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->user()?->isAdmin() !== false) {
+        if (! $request->user() instanceof \App\Models\User) {
             return response()->json([
                 'success' => false,
                 'message' => 'This endpoint is only accessible to app users.',

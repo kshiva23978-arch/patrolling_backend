@@ -3,14 +3,26 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\User;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    public function adminLogin(Request $request)
+    {
+        return $this->attemptLogin($request, Admin::class, 'a_employee_id');
+    }
+
+    public function appLogin(Request $request)
+    {
+        return $this->attemptLogin($request, User::class, 'u_employee_id');
+    }
+
+    protected function attemptLogin(Request $request, string $modelClass, string $employeeIdColumn)
     {
         $request->validate([
             'employee_id' => ['required', 'string'],
@@ -33,30 +45,29 @@ class AuthController extends Controller
             ]);
         }
 
-        $user = User::where('u_employee_id', $employeeId)->first();
+        $account = $modelClass::where($employeeIdColumn, $employeeId)->first();
 
-        if (! $user || ! $this->verifyPassword($user, $password, $providedHash)) {
+        if (! $account || ! $this->verifyPassword($account, $password, $providedHash)) {
             throw ValidationException::withMessages([
                 'employee_id' => ['Invalid employee ID or password.'],
             ]);
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $token = $account->createToken('api-token')->plainTextToken;
 
         return response()->json([
             'success' => true,
             'message' => 'Login successful.',
             'data' => [
-                'employee_id' => $user->u_employee_id,
-                'role' => $user->u_role_id,
+                'employee_id' => $account->getAuthIdentifier(),
                 'token' => $token,
             ],
         ]);
     }
 
-    protected function verifyPassword(User $user, ?string $password, ?string $providedHash): bool
+    protected function verifyPassword(Authenticatable $account, ?string $password, ?string $providedHash): bool
     {
-        $storedHash = (string) $user->u_password_hash;
+        $storedHash = (string) $account->getAuthPassword();
 
         if (str_starts_with($storedHash, '$2') || str_starts_with($storedHash, '$2y$') || str_starts_with($storedHash, '$2a$')) {
             $candidate = $providedHash ?? $password;

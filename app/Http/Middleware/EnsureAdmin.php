@@ -13,7 +13,7 @@ class EnsureAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user()?->isAdmin()) {
+        if (! $request->user() instanceof \App\Models\Admin) {
             return response()->json([
                 'success' => false,
                 'message' => 'This endpoint is only accessible to admin users.',

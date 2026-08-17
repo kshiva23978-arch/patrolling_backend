@@ -63,11 +63,6 @@ class User extends Authenticatable
         return $this->belongsTo(Roles::class, 'u_role_id', 'ro_id');
     }
 
-    public function isAdmin(): bool
-    {
-        return strcasecmp((string) $this->role?->ro_name, 'ADMIN') === 0;
-    }
-
     public function ranges(): BelongsToMany
     {
         return $this->belongsToMany(
