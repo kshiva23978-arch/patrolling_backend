@@ -46,6 +46,7 @@ class RangeController extends Controller
         $validated = $request->validate([
             'rn_range_id' => ['required', 'string', 'max:100', Rule::unique('ranges', 'rn_range_id')],
             'rn_range_name' => ['required', 'string', 'max:100', Rule::unique('ranges', 'rn_range_name')],
+            'rn_category' => ['nullable', Rule::in(Ranges::CATEGORIES)],
             'rn_range_headquarter' => ['required', 'string', 'max:100'],
             'rn_key_activities' => ['nullable', 'string'],
             'patrolling_mode_ids' => ['sometimes', 'array'],
@@ -55,6 +56,7 @@ class RangeController extends Controller
         $range = Ranges::create([
             'rn_range_id' => trim($validated['rn_range_id']),
             'rn_range_name' => trim($validated['rn_range_name']),
+            'rn_category' => $validated['rn_category'] ?? null,
             'rn_range_headquarter' => trim($validated['rn_range_headquarter']),
             'rn_key_activities' => $validated['rn_key_activities'] ?? null,
         ]);
@@ -75,6 +77,7 @@ class RangeController extends Controller
         $validated = $request->validate([
             'rn_range_id' => ['sometimes', 'string', 'max:100', Rule::unique('ranges', 'rn_range_id')->ignore($range->rn_id, 'rn_id')],
             'rn_range_name' => ['sometimes', 'string', 'max:100', Rule::unique('ranges', 'rn_range_name')->ignore($range->rn_id, 'rn_id')],
+            'rn_category' => ['sometimes', 'nullable', Rule::in(Ranges::CATEGORIES)],
             'rn_range_headquarter' => ['sometimes', 'string', 'max:100'],
             'rn_key_activities' => ['sometimes', 'nullable', 'string'],
             'patrolling_mode_ids' => ['sometimes', 'array'],
@@ -87,6 +90,10 @@ class RangeController extends Controller
 
         if (isset($validated['rn_range_name'])) {
             $range->rn_range_name = trim($validated['rn_range_name']);
+        }
+
+        if (array_key_exists('rn_category', $validated)) {
+            $range->rn_category = $validated['rn_category'];
         }
 
         if (isset($validated['rn_range_headquarter'])) {

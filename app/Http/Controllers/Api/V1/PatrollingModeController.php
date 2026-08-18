@@ -29,6 +29,20 @@ class PatrollingModeController extends Controller
         ]);
     }
 
+    /**
+     * All patrolling modes (Flutter field app dropdown).
+     */
+    public function forApp()
+    {
+        $modes = PatrollingModes::query()->orderBy('pm_mode_name')->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrolling modes retrieved successfully.',
+            'data' => PatrollingModeResource::collection($modes),
+        ]);
+    }
+
     public function show(PatrollingModes $patrollingMode)
     {
         return response()->json([

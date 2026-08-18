@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
@@ -52,7 +53,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'u_employee_id' => ['required', 'string', 'max:255', Rule::unique('users', 'u_employee_id')],
-            'u_password_hash' => ['required', 'string', 'min:8'],
+            'u_password_hash' => ['required', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
             'u_role_id' => ['nullable', 'string'],
             'u_designation_id' => ['nullable', 'string'],
             'u_status' => ['sometimes', 'boolean'],
@@ -77,7 +78,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'u_employee_id' => ['sometimes', 'string', 'max:255', Rule::unique('users', 'u_employee_id')->ignore($user->u_id, 'u_id')],
-            'u_password_hash' => ['sometimes', 'string', 'min:8'],
+            'u_password_hash' => ['sometimes', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
             'u_role_id' => ['sometimes', 'string'],
             'u_designation_id' => ['sometimes', 'string'],
             'u_status' => ['sometimes', 'boolean'],

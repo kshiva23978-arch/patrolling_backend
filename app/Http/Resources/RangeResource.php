@@ -13,6 +13,7 @@ class RangeResource extends JsonResource
             'id' => $this->rn_id,
             'range_id' => $this->rn_range_id,
             'range_name' => $this->rn_range_name,
+            'category' => $this->rn_category,
             'range_headquarter' => $this->rn_range_headquarter,
             'key_activities' => $this->rn_key_activities,
             'patrolling_modes' => PatrollingModeResource::collection($this->whenLoaded('patrollingModes')),

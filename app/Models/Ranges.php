@@ -6,12 +6,44 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['rn_id', 'rn_range_id', 'rn_range_name', 'rn_range_headquarter', 'rn_key_activities', 'rn_created_at', 'rn_updated_at'])]
+#[Fillable(['rn_id', 'rn_range_id', 'rn_range_name', 'rn_category', 'rn_range_headquarter', 'rn_key_activities', 'rn_created_at', 'rn_updated_at'])]
 class Ranges extends Model
 {
     use HasFactory;
+
+    public const CATEGORY_HQ = 'HQ Range';
+
+    public const CATEGORY_PROTECTION = 'Protection Range';
+
+    public const CATEGORY_LBWS = 'LBWS';
+
+    public const CATEGORY_MPNP = 'MPNP';
+
+    public const CATEGORY_MGMNP = 'MGMNP';
+
+    public const CATEGORY_RESEARCH_SURVEY = 'Research & Survey';
+
+    /** All recognised range categories. */
+    public const CATEGORIES = [
+        self::CATEGORY_HQ,
+        self::CATEGORY_PROTECTION,
+        self::CATEGORY_LBWS,
+        self::CATEGORY_MPNP,
+        self::CATEGORY_MGMNP,
+        self::CATEGORY_RESEARCH_SURVEY,
+    ];
+
+    /** Categories that represent an actual protected area (i.e. everything but HQ). */
+    public const PROTECTED_AREA_CATEGORIES = [
+        self::CATEGORY_PROTECTION,
+        self::CATEGORY_LBWS,
+        self::CATEGORY_MPNP,
+        self::CATEGORY_MGMNP,
+        self::CATEGORY_RESEARCH_SURVEY,
+    ];
 
     protected $table = 'ranges';
 
@@ -54,5 +86,15 @@ class Ranges extends Model
             'rn_id',
             'u_id'
         );
+    }
+
+    public function beats(): HasMany
+    {
+        return $this->hasMany(Beats::class, 'bt_range_id', 'rn_id');
+    }
+
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicles::class, 'vh_range_id', 'rn_id');
     }
 }

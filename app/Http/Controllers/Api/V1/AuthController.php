@@ -14,7 +14,7 @@ class AuthController extends Controller
 {
     public function adminLogin(Request $request)
     {
-        return $this->attemptLogin($request, Admin::class, 'a_employee_id');
+        return $this->attemptLogin($request, Admin::class, 'a_employee_id', now()->addHours(8));
     }
 
     public function appLogin(Request $request)
@@ -22,7 +22,18 @@ class AuthController extends Controller
         return $this->attemptLogin($request, User::class, 'u_employee_id');
     }
 
-    protected function attemptLogin(Request $request, string $modelClass, string $employeeIdColumn)
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged out.',
+            'data' => null,
+        ]);
+    }
+
+    protected function attemptLogin(Request $request, string $modelClass, string $employeeIdColumn, ?\DateTimeInterface $expiresAt = null)
     {
         $request->validate([
             'employee_id' => ['required', 'string'],
@@ -53,7 +64,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $account->createToken('api-token')->plainTextToken;
+        $token = $account->createToken('api-token', ['*'], $expiresAt)->plainTextToken;
 
         return response()->json([
             'success' => true,

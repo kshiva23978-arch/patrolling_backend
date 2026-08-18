@@ -1,0 +1,1110 @@
+{
+  "info": {
+    "_postman_id": "b7e2f6b0-1e2a-4a3a-9c3a-patrolling-api",
+    "name": "Patrolling API",
+    "description": "End-to-end collection for the Patrolling backend (Laravel + Sanctum). Two auth tracks: Admin (Next.js panel) and App (Flutter field app) — never interchangeable.\n\nRun order for a clean database:\n1. Auth > Admin Login\n2. Auth > App Login\n3. Admin - Ranges > Update Range (set category, optional)\n4. Admin - Patrol Types / Beats / Vehicles as needed\n5. App - Lookups (to see dropdown data)\n6. App - Patrol Entry Lifecycle, in order (Create -> GPS Ping -> Case Report -> End Patrol)\n\nSeed test accounts (create these once via `php artisan tinker` if not already present):\n- Admin: employee_id=`postman_admin`, password=`PostmanAdmin@123`\n- App user: employee_id=`postman_user`, password=`PostmanUser@123`, granted access to a range\n\nAll IDs (tokens, range_id, beat_id, patrol_type_id, mode_id, entry_id, etc.) are captured automatically into collection variables by each request's test script — just run requests top-to-bottom.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000", "type": "string" },
+    { "key": "admin_employee_id", "value": "postman_admin", "type": "string" },
+    { "key": "admin_password", "value": "PostmanAdmin@123", "type": "string" },
+    { "key": "app_employee_id", "value": "postman_user", "type": "string" },
+    { "key": "app_password", "value": "PostmanUser@123", "type": "string" },
+    { "key": "admin_token", "value": "", "type": "string" },
+    { "key": "app_token", "value": "", "type": "string" },
+    { "key": "role_id", "value": "", "type": "string" },
+    { "key": "designation_id", "value": "", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "user_details_id", "value": "", "type": "string" },
+    { "key": "admin_id", "value": "", "type": "string" },
+    { "key": "range_id", "value": "", "type": "string" },
+    { "key": "beat_id", "value": "", "type": "string" },
+    { "key": "patrol_type_id", "value": "", "type": "string" },
+    { "key": "mode_id_walking", "value": "", "type": "string" },
+    { "key": "mode_id_vehicle", "value": "", "type": "string" },
+    { "key": "vehicle_id", "value": "", "type": "string" },
+    { "key": "patrol_entry_id", "value": "", "type": "string" },
+    { "key": "entry_vehicle_id", "value": "", "type": "string" },
+    { "key": "case_report_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Token present', () => pm.expect(body.data.token).to.be.a('string'));",
+                  "pm.collectionVariables.set('admin_token', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{admin_employee_id}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/login", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "login"] },
+            "description": "Throttled 20/min. Returns a Sanctum token for the admin panel."
+          }
+        },
+        {
+          "name": "App Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Token present', () => pm.expect(body.data.token).to.be.a('string'));",
+                  "pm.collectionVariables.set('app_token', body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{app_employee_id}}\",\n  \"password\": \"{{app_password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/login", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "login"] },
+            "description": "Throttled 20/min. Returns a Sanctum token for the Flutter field app."
+          }
+        },
+        {
+          "name": "Get Current User (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/v1/user", "host": ["{{base_url}}"], "path": ["api", "v1", "user"] }
+          }
+        },
+        {
+          "name": "Get Current User (App)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{app_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/v1/user", "host": ["{{base_url}}"], "path": ["api", "v1", "user"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Roles",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/roles", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "roles"] }
+          }
+        },
+        {
+          "name": "Create Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('role_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ro_name\": \"Postman Ranger\",\n  \"ro_description\": \"Seeded via Postman collection\",\n  \"ro_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/roles", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "roles"] }
+          }
+        },
+        {
+          "name": "Get Role",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/roles/{{role_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "roles", "{{role_id}}"] }
+          }
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ro_description\": \"Updated via Postman\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/roles/{{role_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "roles", "{{role_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/roles/{{role_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "roles", "{{role_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Designations",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Designations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/designations", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "designations"] }
+          }
+        },
+        {
+          "name": "Create Designation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('designation_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"d_designation_name\": \"Postman Field Officer\",\n  \"d_rank_order\": 5,\n  \"d_description\": \"Seeded via Postman collection\",\n  \"d_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/designations", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "designations"] }
+          }
+        },
+        {
+          "name": "Get Designation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/designations/{{designation_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "designations", "{{designation_id}}"] }
+          }
+        },
+        {
+          "name": "Update Designation",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"d_id\": \"{{designation_id}}\",\n  \"d_description\": \"Updated via Postman\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/designations/{{designation_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "designations", "{{designation_id}}"] },
+            "description": "Note: DesignationsController@update reads d_id from the body, not the route."
+          }
+        },
+        {
+          "name": "Delete Designation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/designations/{{designation_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "designations", "{{designation_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Users",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/users", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "users"] }
+          }
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('user_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"u_employee_id\": \"PM-FIELD-01\",\n  \"u_password_hash\": \"FieldUser@123\",\n  \"u_role_id\": \"{{role_id}}\",\n  \"u_designation_id\": \"{{designation_id}}\",\n  \"u_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/users", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "users"] },
+            "description": "Password must be 8+ chars with upper, lower, number and symbol. Run Admin - Roles > Create Role and Admin - Designations > Create Designation first so role_id/designation_id are populated (both fields are nullable so this also works without them)."
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "users", "{{user_id}}"] }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"u_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "users", "{{user_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - User Details",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List User Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-details", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-details"] }
+          }
+        },
+        {
+          "name": "Create User Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('user_details_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ud_user_id\": \"{{user_id}}\",\n  \"ud_fullname\": \"Postman Field Officer\",\n  \"ud_mobile_number\": \"9876543210\",\n  \"ud_email\": \"field.officer@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-details", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-details"] },
+            "description": "Run Admin - Users > Create User first so user_id is populated."
+          }
+        },
+        {
+          "name": "Get User Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-details/{{user_details_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-details", "{{user_details_id}}"] }
+          }
+        },
+        {
+          "name": "Update User Details",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ud_user_id\": \"{{user_id}}\",\n  \"ud_mobile_number\": \"9999999999\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-details/{{user_details_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-details", "{{user_details_id}}"] },
+            "description": "Note: UserDetailsController@update reads ud_user_id from the body, not the route."
+          }
+        },
+        {
+          "name": "Delete User Details",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-details/{{user_details_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-details", "{{user_details_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Ranges",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Ranges",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.length > 0 && !pm.collectionVariables.get('range_id')) {",
+                  "  pm.collectionVariables.set('range_id', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/ranges", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "ranges"] },
+            "description": "Also grabs the first existing range into range_id if you don't want to create a new one."
+          }
+        },
+        {
+          "name": "Create Range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('range_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rn_range_id\": \"PM0001\",\n  \"rn_range_name\": \"Postman Test Range\",\n  \"rn_category\": \"Protection Range\",\n  \"rn_range_headquarter\": \"Test HQ\",\n  \"rn_key_activities\": \"Seeded via Postman collection\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/ranges", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "ranges"] },
+            "description": "rn_category must be one of: HQ Range, Protection Range, LBWS, MPNP, MGMNP, Research & Survey."
+          }
+        },
+        {
+          "name": "Get Range",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/ranges/{{range_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "ranges", "{{range_id}}"] }
+          }
+        },
+        {
+          "name": "Update Range (set category)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rn_category\": \"Protection Range\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/ranges/{{range_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "ranges", "{{range_id}}"] },
+            "description": "Category drives which patrol types are allowed for this range."
+          }
+        },
+        {
+          "name": "Delete Range",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/ranges/{{range_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "ranges", "{{range_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Patrolling Modes",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Patrolling Modes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "(body.data || []).forEach(m => {",
+                  "  if (/walk/i.test(m.mode_name)) pm.collectionVariables.set('mode_id_walking', m.id);",
+                  "  if (/wheel|vehicle/i.test(m.mode_name)) pm.collectionVariables.set('mode_id_vehicle', m.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrolling-modes", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrolling-modes"] },
+            "description": "Auto-captures mode_id_walking / mode_id_vehicle for the patrol entry request. Already seeded with Walking, 4 Wheeler, Boat."
+          }
+        },
+        {
+          "name": "Create Patrolling Mode",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pm_mode_name\": \"Cycle\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrolling-modes", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrolling-modes"] }
+          }
+        },
+        {
+          "name": "Update Patrolling Mode",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pm_mode_name\": \"Bicycle\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrolling-modes/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrolling-modes", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Delete Patrolling Mode",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrolling-modes/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrolling-modes", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Patrol Types",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Patrol Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.length > 0 && !pm.collectionVariables.get('patrol_type_id')) {",
+                  "  pm.collectionVariables.set('patrol_type_id', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrol-types", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrol-types"] },
+            "description": "Pre-seeded with: Vehicle Patrol Form, Walking Patrol Form, Boat Patrol Form, Quick Response Team Form, Wildlife Rescue Form, Anti-Poaching Form, Marine Surveillance Form, Crocodile Conflict Form."
+          }
+        },
+        {
+          "name": "Create Patrol Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('patrol_type_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pt_name\": \"Postman Custom Patrol\",\n  \"pt_description\": \"Seeded via Postman collection\",\n  \"pt_status\": true,\n  \"categories\": [\"Protection Range\", \"HQ Range\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrol-types", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrol-types"] },
+            "description": "categories must be from: HQ Range, Protection Range, LBWS, MPNP, MGMNP, Research & Survey."
+          }
+        },
+        {
+          "name": "Get Patrol Type",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrol-types/{{patrol_type_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrol-types", "{{patrol_type_id}}"] }
+          }
+        },
+        {
+          "name": "Update Patrol Type",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categories\": [\"Protection Range\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrol-types/{{patrol_type_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrol-types", "{{patrol_type_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Patrol Type",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/patrol-types/{{patrol_type_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "patrol-types", "{{patrol_type_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Beats",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Beats (by range)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/beats?range_id={{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "beats"],
+              "query": [{ "key": "range_id", "value": "{{range_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Create Beat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('beat_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bt_range_id\": \"{{range_id}}\",\n  \"bt_name\": \"Postman Beat 1\",\n  \"bt_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/beats", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "beats"] },
+            "description": "Run Admin - Ranges > Create/List Range first so range_id is populated."
+          }
+        },
+        {
+          "name": "Get Beat",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/beats/{{beat_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "beats", "{{beat_id}}"] }
+          }
+        },
+        {
+          "name": "Update Beat",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bt_name\": \"Postman Beat 1 (Updated)\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/beats/{{beat_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "beats", "{{beat_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Beat",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/beats/{{beat_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "beats", "{{beat_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Vehicles",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Vehicles (by range)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vehicles?range_id={{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "vehicles"],
+              "query": [{ "key": "range_id", "value": "{{range_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Create Vehicle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('vehicle_id', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Status is 201 or 422 (already exists)', () => pm.expect([201,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vh_range_id\": \"{{range_id}}\",\n  \"vh_registration_number\": \"PM-JEEP-01\",\n  \"vh_type\": \"vehicle\",\n  \"vh_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/vehicles", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "vehicles"] },
+            "description": "Note: patrol entries auto-create/reuse vehicles by registration number, so pre-registering here is optional — mainly useful for fleet visibility."
+          }
+        },
+        {
+          "name": "Get Vehicle",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/vehicles/{{vehicle_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "vehicles", "{{vehicle_id}}"] }
+          }
+        },
+        {
+          "name": "Update Vehicle",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vh_status\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/vehicles/{{vehicle_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "vehicles", "{{vehicle_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Vehicle",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/admin/vehicles/{{vehicle_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "vehicles", "{{vehicle_id}}"] },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - User Range Access",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "Grant Range Access",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"range_id\": \"{{range_id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/admin/user-range-access", "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-range-access"] },
+            "description": "Grants the created user_id access to range_id. Note: this is the ADMIN-created user (Admin - Users), not the postman_user app-login account used in the App folder — grant access separately for whichever user you intend to log in as."
+          }
+        },
+        {
+          "name": "List Ranges for User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/user-range-access?user_id={{user_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-range-access"],
+              "query": [{ "key": "user_id", "value": "{{user_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "List Users for Range",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/user-range-access?range_id={{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-range-access"],
+              "query": [{ "key": "range_id", "value": "{{range_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Revoke Range Access",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/user-range-access/{{user_id}}/{{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "admin", "user-range-access", "{{user_id}}", "{{range_id}}"]
+            },
+            "description": "Destructive — only run intentionally."
+          }
+        }
+      ]
+    },
+    {
+      "name": "App - Lookups",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{app_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "My Ranges",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "if (body.data && body.data.length > 0) {",
+                  "  pm.collectionVariables.set('range_id', body.data[0].id);",
+                  "} else {",
+                  "  console.warn('postman_user has no range access yet — grant it via Admin - User Range Access, or via tinker: $user->ranges()->attach($range->rn_id)');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/app/my-ranges", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "my-ranges"] },
+            "description": "Ranges assigned to the logged-in field user. Overwrites range_id with this user's first assigned range so the Patrol Entry Lifecycle folder uses a range this user can actually access."
+          }
+        },
+        {
+          "name": "Patrol Types (for my range)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.length > 0) {",
+                  "  pm.collectionVariables.set('patrol_type_id', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/app/patrol-types?range_id={{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-types"],
+              "query": [{ "key": "range_id", "value": "{{range_id}}" }]
+            },
+            "description": "Filtered by the range's category — only patrol types allowed for that category are returned."
+          }
+        },
+        {
+          "name": "Beats (for my range)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.length > 0) {",
+                  "  pm.collectionVariables.set('beat_id', body.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/app/beats?range_id={{range_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "v1", "app", "beats"],
+              "query": [{ "key": "range_id", "value": "{{range_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Patrolling Modes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "(body.data || []).forEach(m => {",
+                  "  if (/walk/i.test(m.mode_name)) pm.collectionVariables.set('mode_id_walking', m.id);",
+                  "  if (/wheel|vehicle/i.test(m.mode_name)) pm.collectionVariables.set('mode_id_vehicle', m.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/app/patrolling-modes", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrolling-modes"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "App - Patrol Entry Lifecycle",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{app_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "1. Create Patrol Entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('patrol_entry_id', body.data.id);",
+                  "if (body.data.vehicles && body.data.vehicles.length > 0) {",
+                  "  pm.collectionVariables.set('entry_vehicle_id', body.data.vehicles[0].id);",
+                  "}",
+                  "pm.test('Patrol ID follows range+employee+date format', () => pm.expect(body.data.patrol_id).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pe_patrol_date\": \"{{$isoTimestamp}}\",\n  \"pe_start_time\": \"06:00\",\n  \"pe_range_id\": \"{{range_id}}\",\n  \"pe_beat_id\": \"{{beat_id}}\",\n  \"pe_patrol_type_id\": \"{{patrol_type_id}}\",\n  \"pe_staff_deployed_count\": 3,\n  \"pe_gps_enabled\": true,\n  \"pe_start_latitude\": 12.9716,\n  \"pe_start_longitude\": 77.5946,\n  \"mode_ids\": [\"{{mode_id_walking}}\", \"{{mode_id_vehicle}}\"],\n  \"vehicles\": [\n    {\n      \"type\": \"4_wheeler\",\n      \"registration_no\": \"PM-JEEP-01\",\n      \"start_odometer\": 1000\n    }\n  ],\n  \"pe_remarks\": \"Created via Postman collection\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries"] },
+            "description": "Run App - Lookups (My Ranges, Patrol Types, Beats, Patrolling Modes) first so range_id/patrol_type_id/beat_id/mode_id_* are populated with values this user actually has access to.\n\npe_patrol_date must use {{$isoTimestamp}} (today) — Postman's dynamic variable — since the API rejects future dates.\n\nIf the chosen patrol type isn't allowed for the range's category, this returns 422 on pe_patrol_type_id — pick a different range or patrol type."
+          }
+        },
+        {
+          "name": "2. List My Patrol Entries",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries"] }
+          }
+        },
+        {
+          "name": "3. Get Patrol Entry",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries/{{patrol_entry_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries", "{{patrol_entry_id}}"] }
+          }
+        },
+        {
+          "name": "4. Add GPS Ping",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 12.9720,\n  \"longitude\": 77.5950\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries/{{patrol_entry_id}}/gps", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries", "{{patrol_entry_id}}", "gps"] },
+            "description": "Simulates one 30-second GPS tick from the field app. Re-send this repeatedly (with changing lat/lng) to simulate a route. Throttled to 20 requests/min per user."
+          }
+        },
+        {
+          "name": "5. Add Case Report (with photo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('case_report_id', body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "details", "value": "Found illegal timber cutting near the trail marker.", "type": "text" },
+                { "key": "latitude", "value": "12.9725", "type": "text" },
+                { "key": "longitude", "value": "77.5955", "type": "text" },
+                { "key": "case_number", "value": "", "type": "text", "description": "Optional — leave blank if a case hasn't been formally registered yet." },
+                { "key": "photos[]", "type": "file", "src": [], "description": "REQUIRED: click 'Select Files' and choose one or more JPG/PNG images (max 15MB each, up to 10). Server auto-compresses to ~1920px/JPEG q70 and stores privately." }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries/{{patrol_entry_id}}/cases", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries", "{{patrol_entry_id}}", "cases"] },
+            "description": "multipart/form-data — you MUST attach at least one image file under photos[] in the Body tab before sending, Postman cannot embed binary files inside an exported collection."
+          }
+        },
+        {
+          "name": "6. End Patrol",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status is completed', () => pm.expect(body.data.status).to.eql('completed'));",
+                  "pm.test('Total distance calculated', () => pm.expect(body.data.total_distance).to.not.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"end_latitude\": 12.9730,\n  \"end_longitude\": 77.5960,\n  \"area_patrolled\": \"Trail sections 1 through 4, riverside beat.\",\n  \"vehicle_odometers\": [\n    {\n      \"pev_id\": \"{{entry_vehicle_id}}\",\n      \"end_odometer\": 1045.5\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries/{{patrol_entry_id}}/end", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries", "{{patrol_entry_id}}", "end"] },
+            "description": "Auto-captures end time server-side. end_odometer must be >= the vehicle's start_odometer (1000 in the seed example above)."
+          }
+        },
+        {
+          "name": "7. Add GPS Ping (should fail — patrol ended)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409 (already ended)', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 12.9731,\n  \"longitude\": 77.5961\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/v1/app/patrol-entries/{{patrol_entry_id}}/gps", "host": ["{{base_url}}"], "path": ["api", "v1", "app", "patrol-entries", "{{patrol_entry_id}}", "gps"] },
+            "description": "Negative test confirming a completed patrol rejects further GPS pings/case reports."
+          }
+        }
+      ]
+    }
+  ]
+}

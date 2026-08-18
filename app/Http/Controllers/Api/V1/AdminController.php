@@ -8,6 +8,7 @@ use App\Models\Admin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class AdminController extends Controller
 {
@@ -52,7 +53,7 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'a_employee_id' => ['required', 'string', 'max:255', Rule::unique('admins', 'a_employee_id')],
-            'a_password_hash' => ['required', 'string', 'min:8'],
+            'a_password_hash' => ['required', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
             'a_role_id' => ['nullable', 'string'],
             'a_designation_id' => ['nullable', 'string'],
             'a_status' => ['sometimes', 'boolean'],
@@ -77,7 +78,7 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'a_employee_id' => ['sometimes', 'string', 'max:255', Rule::unique('admins', 'a_employee_id')->ignore($admin->a_id, 'a_id')],
-            'a_password_hash' => ['sometimes', 'string', 'min:8'],
+            'a_password_hash' => ['sometimes', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
             'a_role_id' => ['sometimes', 'string'],
             'a_designation_id' => ['sometimes', 'string'],
             'a_status' => ['sometimes', 'boolean'],
