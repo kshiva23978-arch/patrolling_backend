@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
-#[Fillable(['prp_id', 'prp_entry_id', 'prp_latitude', 'prp_longitude', 'prp_recorded_at'])]
+#[Fillable(['prp_id', 'prp_entry_id', 'prp_latitude', 'prp_longitude', 'prp_travel_mode', 'prp_vehicle_id', 'prp_recorded_at'])]
 class PatrolRoutePoints extends Model
 {
     use HasFactory;
@@ -30,8 +30,20 @@ class PatrolRoutePoints extends Model
         });
     }
 
+    protected function casts(): array
+    {
+        return [
+            'prp_recorded_at' => 'datetime',
+        ];
+    }
+
     public function entry(): BelongsTo
     {
         return $this->belongsTo(PatrollingEntries::class, 'prp_entry_id', 'pe_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(PatrolEntryVehicles::class, 'prp_vehicle_id', 'pev_id');
     }
 }

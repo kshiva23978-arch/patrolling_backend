@@ -15,18 +15,25 @@ use Illuminate\Support\Str;
     'pe_range_id', 'pe_beat_id', 'pe_area_covered', 'pe_patrol_type_id',
     'pe_start_latitude', 'pe_start_longitude', 'pe_end_latitude', 'pe_end_longitude',
     'pe_start_address', 'pe_end_address', 'pe_total_distance',
-    'pe_staff_deployed_count', 'pe_patrol_leader_id', 'pe_area_patrolled',
+    'pe_staff_deployed_count', 'pe_staff_names', 'pe_incharge_staff', 'pe_patrol_leader_id', 'pe_area_patrolled',
     'pe_incident_occurred', 'pe_case_registered', 'pe_seizure_made', 'pe_remarks',
-    'pe_status', 'pe_gps_enabled', 'pe_ended_at',
+    'pe_status', 'pe_gps_enabled', 'pe_started_at', 'pe_ended_at',
+    'pe_current_travel_mode', 'pe_current_vehicle_id',
     'pe_created_at', 'pe_updated_at',
 ])]
 class PatrollingEntries extends Model
 {
     use HasFactory;
 
+    public const STATUS_PENDING = 'pending';
+
     public const STATUS_IN_PROGRESS = 'in_progress';
 
     public const STATUS_COMPLETED = 'completed';
+
+    public const TRAVEL_MODE_WALKING = 'walking';
+
+    public const TRAVEL_MODE_VEHICLE = 'vehicle';
 
     protected $table = 'pe_patrolling_entries';
 
@@ -55,6 +62,8 @@ class PatrollingEntries extends Model
             'pe_case_registered' => 'boolean',
             'pe_seizure_made' => 'boolean',
             'pe_gps_enabled' => 'boolean',
+            'pe_staff_names' => 'array',
+            'pe_started_at' => 'datetime',
             'pe_ended_at' => 'datetime',
         ];
     }
@@ -108,9 +117,19 @@ class PatrollingEntries extends Model
         return $this->hasMany(PatrolEntryVehicles::class, 'pev_entry_id', 'pe_id');
     }
 
+    public function currentVehicle(): BelongsTo
+    {
+        return $this->belongsTo(PatrolEntryVehicles::class, 'pe_current_vehicle_id', 'pev_id');
+    }
+
     public function caseReports(): HasMany
     {
         return $this->hasMany(PatrolCaseReports::class, 'pcr_entry_id', 'pe_id');
+    }
+
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(PatrolIncident::class, 'pi_entry_id', 'pe_id');
     }
 
     public function media(): HasMany

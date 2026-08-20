@@ -66,13 +66,19 @@ class AuthController extends Controller
 
         $token = $account->createToken('api-token', ['*'], $expiresAt)->plainTextToken;
 
+        $data = [
+            'employee_id' => $account->getAuthIdentifier(),
+            'token' => $token,
+        ];
+
+        if ($account instanceof User) {
+            $data['name'] = $account->details?->ud_fullname;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Login successful.',
-            'data' => [
-                'employee_id' => $account->getAuthIdentifier(),
-                'token' => $token,
-            ],
+            'data' => $data,
         ]);
     }
 

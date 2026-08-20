@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AdminController;
+use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeatController;
 use App\Http\Controllers\Api\V1\DesignationsController;
@@ -49,6 +50,12 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::get('/user-range-access', [UserRangeAccessController::class, 'index']);
     Route::post('/user-range-access', [UserRangeAccessController::class, 'store']);
     Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
+
+    Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
+    Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
+    Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
+    Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
+    Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
 });
 
 /*
@@ -57,6 +64,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout'])->name('app.logout');
     Route::get('/my-ranges', [RangeController::class, 'myRanges']);
     Route::get('/patrol-types', [PatrolTypeController::class, 'forApp']);
     Route::get('/beats', [BeatController::class, 'forApp']);
@@ -65,7 +73,11 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/patrol-entries', [PatrolEntryController::class, 'index']);
     Route::post('/patrol-entries', [PatrolEntryController::class, 'store']);
     Route::get('/patrol-entries/{entry}', [PatrolEntryController::class, 'show']);
+    Route::patch('/patrol-entries/{entry}', [PatrolEntryController::class, 'update']);
+    Route::post('/patrol-entries/{entry}/start', [PatrolEntryController::class, 'startPatrol']);
+    Route::patch('/patrol-entries/{entry}/current-travel-mode', [PatrolEntryController::class, 'setCurrentTravelMode']);
     Route::post('/patrol-entries/{entry}/end', [PatrolEntryController::class, 'endPatrol']);
+    Route::post('/patrol-entries/{entry}/incidents', [PatrolEntryController::class, 'addIncident']);
     Route::post('/patrol-entries/{entry}/cases', [PatrolEntryController::class, 'addCaseReport']);
 
     Route::middleware('throttle:20,1')->group(function () {

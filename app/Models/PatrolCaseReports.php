@@ -9,7 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['pcr_id', 'pcr_entry_id', 'pcr_reported_by', 'pcr_case_number', 'pcr_details', 'pcr_latitude', 'pcr_longitude', 'pcr_address', 'pcr_reported_at', 'pcr_created_at', 'pcr_updated_at'])]
+#[Fillable([
+    'pcr_id', 'pcr_entry_id', 'pcr_reported_by', 'pcr_case_number', 'pcr_details',
+    'pcr_conflict_type', 'pcr_rescue_conducted', 'pcr_species_rescued', 'pcr_rehab_details', 'pcr_response_time',
+    'pcr_latitude', 'pcr_longitude', 'pcr_address', 'pcr_reported_at', 'pcr_created_at', 'pcr_updated_at',
+])]
 class PatrolCaseReports extends Model
 {
     use HasFactory;
@@ -36,6 +40,7 @@ class PatrolCaseReports extends Model
     protected function casts(): array
     {
         return [
+            'pcr_rescue_conducted' => 'boolean',
             'pcr_reported_at' => 'datetime',
         ];
     }

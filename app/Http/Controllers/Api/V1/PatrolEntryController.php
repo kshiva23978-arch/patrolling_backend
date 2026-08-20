@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PatrolCaseReportResource;
 use App\Http\Resources\PatrolEntryResource;
+use App\Http\Resources\PatrolIncidentResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
+use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
 use App\Models\PatrolEntryVehicles;
+use App\Models\PatrolIncident;
+use App\Models\PatrolIncidentMedia;
 use App\Models\PatrolRoutePoints;
 use App\Models\PatrollingEntries;
 use App\Models\PatrolTypes;
@@ -56,7 +60,7 @@ class PatrolEntryController extends Controller
     {
         $this->authorizeOwner($request, $entry);
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'deployedStaff', 'caseReports.media', 'routePoints']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints']);
 
         return response()->json([
             'success' => true,
@@ -66,7 +70,11 @@ class PatrolEntryController extends Controller
     }
 
     /**
-     * Create a new patrolling entry.
+     * Create a new patrolling entry. The entry starts out "pending" — GPS
+     * tracking begins and the status flips to in-progress only once the
+     * ranger explicitly calls {@see startPatrol}. Vehicles may optionally
+     * be added here too, or later from the dashboard — neither is required
+     * to create the entry.
      */
     public function store(Request $request)
     {
@@ -80,18 +88,14 @@ class PatrolEntryController extends Controller
             'pe_area_covered' => ['nullable', 'string', 'max:255'],
             'pe_patrol_type_id' => ['required', 'uuid', 'exists:patrol_types,pt_id'],
             'pe_staff_deployed_count' => ['required', 'integer', 'min:1', 'max:1000'],
-            'staff_ids' => ['nullable', 'array', 'max:1000'],
-            'staff_ids.*' => ['uuid', 'distinct', 'exists:users,u_id'],
-            'pe_gps_enabled' => ['required', 'boolean'],
-            'pe_start_latitude' => ['required_if:pe_gps_enabled,true', 'nullable', 'numeric', 'between:-90,90'],
-            'pe_start_longitude' => ['required_if:pe_gps_enabled,true', 'nullable', 'numeric', 'between:-180,180'],
+            'staff_names' => ['nullable', 'array', 'max:1000'],
+            'staff_names.*' => ['string', 'max:150'],
             'mode_ids' => ['required', 'array', 'min:1'],
             'mode_ids.*' => ['uuid', 'distinct', 'exists:patrolling_modes,pm_id'],
             'vehicles' => ['sometimes', 'array'],
             'vehicles.*.type' => ['required_with:vehicles', Rule::in(['4_wheeler', 'boat'])],
             'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
             'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
-            'pe_remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
         if (! $user->ranges()->where('rn_id', $validated['pe_range_id'])->exists()) {
@@ -100,9 +104,9 @@ class PatrolEntryController extends Controller
             ]);
         }
 
-        if (isset($validated['staff_ids']) && count($validated['staff_ids']) > $validated['pe_staff_deployed_count']) {
+        if (isset($validated['staff_names']) && count($validated['staff_names']) > $validated['pe_staff_deployed_count']) {
             throw ValidationException::withMessages([
-                'staff_ids' => 'Number of named staff cannot exceed the staff deployed count.',
+                'staff_names' => 'Number of named staff cannot exceed the staff deployed count.',
             ]);
         }
 
@@ -126,26 +130,7 @@ class PatrolEntryController extends Controller
             }
         }
 
-        $modeNames = DB::table('patrolling_modes')
-            ->whereIn('pm_id', $validated['mode_ids'])
-            ->pluck('pm_mode_name')
-            ->map(fn ($name) => strtolower($name));
-
         $vehiclesInput = $validated['vehicles'] ?? [];
-        $has4Wheeler = collect($vehiclesInput)->contains(fn ($v) => $v['type'] === '4_wheeler');
-        $hasBoat = collect($vehiclesInput)->contains(fn ($v) => $v['type'] === 'boat');
-
-        if ($modeNames->contains(fn ($n) => str_contains($n, 'wheel') || str_contains($n, 'vehicle')) && ! $has4Wheeler) {
-            throw ValidationException::withMessages([
-                'vehicles' => 'At least one 4-wheeler vehicle is required for the selected patrol mode.',
-            ]);
-        }
-
-        if ($modeNames->contains(fn ($n) => str_contains($n, 'boat')) && ! $hasBoat) {
-            throw ValidationException::withMessages([
-                'vehicles' => 'At least one boat is required for the selected patrol mode.',
-            ]);
-        }
 
         $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput) {
             $entry = PatrollingEntries::create([
@@ -157,19 +142,13 @@ class PatrolEntryController extends Controller
                 'pe_area_covered' => $validated['pe_area_covered'] ?? null,
                 'pe_patrol_type_id' => $validated['pe_patrol_type_id'],
                 'pe_staff_deployed_count' => $validated['pe_staff_deployed_count'],
+                'pe_staff_names' => $validated['staff_names'] ?? [],
                 'pe_patrol_leader_id' => $user->u_id,
-                'pe_gps_enabled' => $validated['pe_gps_enabled'],
-                'pe_start_latitude' => $validated['pe_start_latitude'] ?? null,
-                'pe_start_longitude' => $validated['pe_start_longitude'] ?? null,
-                'pe_status' => PatrollingEntries::STATUS_IN_PROGRESS,
-                'pe_remarks' => $validated['pe_remarks'] ?? null,
+                'pe_gps_enabled' => false,
+                'pe_status' => PatrollingEntries::STATUS_PENDING,
             ]);
 
             $entry->modes()->sync($validated['mode_ids']);
-
-            if (! empty($validated['staff_ids'])) {
-                $entry->deployedStaff()->sync($validated['staff_ids']);
-            }
 
             foreach ($vehiclesInput as $vehicleInput) {
                 $vehicle = Vehicles::updateOrCreate(
@@ -193,18 +172,7 @@ class PatrolEntryController extends Controller
             return $entry;
         });
 
-        if (! empty($validated['pe_gps_enabled']) && ! empty($validated['pe_start_latitude'])) {
-            ReverseGeocodeLocation::dispatch(
-                PatrollingEntries::class,
-                $entry->pe_id,
-                'pe_id',
-                (float) $validated['pe_start_latitude'],
-                (float) $validated['pe_start_longitude'],
-                'pe_start_address'
-            );
-        }
-
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'deployedStaff']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
 
         return response()->json([
             'success' => true,
@@ -214,7 +182,216 @@ class PatrolEntryController extends Controller
     }
 
     /**
-     * Record a live GPS ping while the patrol is in progress (client polls this ~every 30s).
+     * Start a pending patrol: captures the ranger's current GPS fix as the
+     * official start location and flips the entry to in-progress. The
+     * ranger must have already picked a current travel mode (walking or one
+     * of the entry's vehicles) via {@see setCurrentTravelMode} — a patrol
+     * can't start without knowing how the ranger is traveling.
+     */
+    public function startPatrol(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($entry->pe_status !== PatrollingEntries::STATUS_PENDING) {
+            abort(409, 'This patrol has already been started or has ended.');
+        }
+
+        if (empty($entry->pe_staff_names)) {
+            throw ValidationException::withMessages([
+                'staff_names' => 'Add staff names before starting the patrol.',
+            ]);
+        }
+
+        if ($entry->pe_current_travel_mode === null) {
+            throw ValidationException::withMessages([
+                'current_travel_mode' => 'Select how you are currently traveling (walking or a vehicle) before starting the patrol.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $entry->update([
+            'pe_gps_enabled' => true,
+            'pe_start_latitude' => $validated['latitude'],
+            'pe_start_longitude' => $validated['longitude'],
+            'pe_status' => PatrollingEntries::STATUS_IN_PROGRESS,
+            'pe_started_at' => now(),
+        ]);
+
+        ReverseGeocodeLocation::dispatch(
+            PatrollingEntries::class,
+            $entry->pe_id,
+            'pe_id',
+            (float) $validated['latitude'],
+            (float) $validated['longitude'],
+            'pe_start_address'
+        );
+
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrol started successfully.',
+            'data' => new PatrolEntryResource($entry),
+        ]);
+    }
+
+    /**
+     * Sets (or clears) how the ranger is currently traveling on this patrol
+     * — on foot ("walking"), in one of the entry's own vehicles, or neither.
+     * Only one mode is active at a time; the dashboard shows it as a toggle
+     * per option.
+     */
+    public function setCurrentTravelMode(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+        $this->assertNotCompleted($entry);
+
+        $validated = $request->validate([
+            'mode' => ['required', Rule::in(['walking', 'vehicle', 'none'])],
+            'vehicle_id' => ['required_if:mode,vehicle', 'nullable', 'uuid'],
+        ]);
+
+        if ($validated['mode'] === 'vehicle') {
+            $vehicle = $entry->vehicles()->where('pev_id', $validated['vehicle_id'])->first();
+
+            if (! $vehicle) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That vehicle does not belong to this patrol entry.',
+                ]);
+            }
+
+            $entry->update([
+                'pe_current_travel_mode' => PatrollingEntries::TRAVEL_MODE_VEHICLE,
+                'pe_current_vehicle_id' => $vehicle->pev_id,
+            ]);
+        } elseif ($validated['mode'] === 'walking') {
+            $entry->update([
+                'pe_current_travel_mode' => PatrollingEntries::TRAVEL_MODE_WALKING,
+                'pe_current_vehicle_id' => null,
+            ]);
+        } else {
+            $entry->update([
+                'pe_current_travel_mode' => null,
+                'pe_current_vehicle_id' => null,
+            ]);
+        }
+
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Current travel mode updated.',
+            'data' => new PatrolEntryResource($entry),
+        ]);
+    }
+
+    /**
+     * Update the patrol modes, deployed staff names/in-charge, and/or
+     * vehicles for a pending or in-progress entry. Vehicles passed here are
+     * added alongside any already attached to the entry, and staff names
+     * already saved can never be dropped from the list — both can only
+     * grow once the patrol is created.
+     */
+    public function update(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+        $this->assertNotCompleted($entry);
+
+        $validated = $request->validate([
+            'mode_ids' => ['sometimes', 'array', 'min:1'],
+            'mode_ids.*' => ['uuid', 'distinct', 'exists:patrolling_modes,pm_id'],
+            'staff_names' => ['sometimes', 'array', 'max:1000'],
+            'staff_names.*' => ['string', 'max:150'],
+            'incharge_staff' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'vehicles' => ['sometimes', 'array'],
+            'vehicles.*.type' => ['required_with:vehicles', Rule::in(['4_wheeler', 'boat'])],
+            'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
+            'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+        ]);
+
+        if (isset($validated['staff_names']) && count($validated['staff_names']) > $entry->pe_staff_deployed_count) {
+            throw ValidationException::withMessages([
+                'staff_names' => 'Number of named staff cannot exceed the staff deployed count.',
+            ]);
+        }
+
+        if (isset($validated['staff_names'])) {
+            $missing = array_diff($entry->pe_staff_names ?? [], $validated['staff_names']);
+
+            if (! empty($missing)) {
+                throw ValidationException::withMessages([
+                    'staff_names' => 'Staff already added cannot be removed: '.implode(', ', $missing),
+                ]);
+            }
+        }
+
+        if (array_key_exists('incharge_staff', $validated) && $validated['incharge_staff'] !== null) {
+            $names = $validated['staff_names'] ?? $entry->pe_staff_names ?? [];
+
+            if (! in_array($validated['incharge_staff'], $names, true)) {
+                throw ValidationException::withMessages([
+                    'incharge_staff' => 'The in-charge must be one of the deployed staff names.',
+                ]);
+            }
+        }
+
+        $range = $entry->range;
+        $vehiclesInput = $validated['vehicles'] ?? [];
+
+        DB::transaction(function () use ($entry, $validated, $range, $vehiclesInput) {
+            if (isset($validated['mode_ids'])) {
+                $entry->modes()->sync($validated['mode_ids']);
+            }
+
+            if (isset($validated['staff_names'])) {
+                $entry->pe_staff_names = $validated['staff_names'];
+                $entry->save();
+            }
+
+            if (array_key_exists('incharge_staff', $validated)) {
+                $entry->pe_incharge_staff = $validated['incharge_staff'];
+                $entry->save();
+            }
+
+            foreach ($vehiclesInput as $vehicleInput) {
+                $vehicle = Vehicles::updateOrCreate(
+                    [
+                        'vh_range_id' => $range->rn_id,
+                        'vh_registration_number' => strtoupper(trim($vehicleInput['registration_no'])),
+                    ],
+                    [
+                        'vh_type' => $vehicleInput['type'] === '4_wheeler' ? 'vehicle' : 'boat',
+                    ]
+                );
+
+                PatrolEntryVehicles::create([
+                    'pev_entry_id' => $entry->pe_id,
+                    'pev_vehicle_id' => $vehicle->vh_id,
+                    'pev_vehicle_type' => $vehicleInput['type'],
+                    'pev_start_odometer' => $vehicleInput['start_odometer'] ?? null,
+                ]);
+            }
+        });
+
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrol entry updated successfully.',
+            'data' => new PatrolEntryResource($entry),
+        ]);
+    }
+
+    /**
+     * Record a live GPS ping while the patrol is in progress (the app polls
+     * this every 30s). Snapshots the entry's current travel mode/vehicle at
+     * ping time — set via {@see setCurrentTravelMode} — so the route trail
+     * shows how the ranger was traveling at each point, even if that
+     * changes mid-patrol.
      */
     public function addGpsPing(Request $request, PatrollingEntries $entry)
     {
@@ -231,6 +408,8 @@ class PatrolEntryController extends Controller
             'prp_entry_id' => $entry->pe_id,
             'prp_latitude' => $validated['latitude'],
             'prp_longitude' => $validated['longitude'],
+            'prp_travel_mode' => $entry->pe_current_travel_mode,
+            'prp_vehicle_id' => $entry->pe_current_vehicle_id,
             'prp_recorded_at' => $validated['recorded_at'] ?? now(),
         ]);
 
@@ -239,8 +418,75 @@ class PatrolEntryController extends Controller
             'message' => 'GPS point recorded.',
             'data' => [
                 'id' => $point->prp_id,
+                'travel_mode' => $point->prp_travel_mode,
                 'recorded_at' => $point->prp_recorded_at->toISOString(),
             ],
+        ], 201);
+    }
+
+    /**
+     * Log a lightweight incident during the patrol — quicker to file than a
+     * full case report ({@see addCaseReport}), with an optional geo-tagged
+     * photo. The app then asks the ranger whether to escalate it into a
+     * full case report.
+     */
+    public function addIncident(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+        $this->assertInProgress($entry);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'details' => ['required', 'string', 'max:5000'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'photo' => ['sometimes', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+        ]);
+
+        $incident = DB::transaction(function () use ($validated, $entry, $request) {
+            $incident = PatrolIncident::create([
+                'pi_entry_id' => $entry->pe_id,
+                'pi_reported_by' => $request->user()->u_id,
+                'pi_name' => $validated['name'],
+                'pi_details' => $validated['details'],
+                'pi_latitude' => $validated['latitude'] ?? null,
+                'pi_longitude' => $validated['longitude'] ?? null,
+                'pi_reported_at' => now(),
+            ]);
+
+            if ($request->hasFile('photo')) {
+                $stored = $this->photos->compressAndStore($request->file('photo'), 'patrol-incident-media/'.$entry->pe_id);
+
+                PatrolIncidentMedia::create([
+                    'pim_incident_id' => $incident->pi_id,
+                    'pim_disk' => 'local',
+                    'pim_file_path' => $stored['path'],
+                    'pim_file_size' => $stored['size'],
+                    'pim_latitude' => $validated['latitude'] ?? null,
+                    'pim_longitude' => $validated['longitude'] ?? null,
+                ]);
+            }
+
+            return $incident;
+        });
+
+        if (! empty($validated['latitude'])) {
+            ReverseGeocodeLocation::dispatch(
+                PatrolIncident::class,
+                $incident->pi_id,
+                'pi_id',
+                (float) $validated['latitude'],
+                (float) $validated['longitude'],
+                'pi_address'
+            );
+        }
+
+        $incident->load('media');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Incident recorded successfully.',
+            'data' => new PatrolIncidentResource($incident),
         ], 201);
     }
 
@@ -253,26 +499,35 @@ class PatrolEntryController extends Controller
         $this->assertInProgress($entry);
 
         $validated = $request->validate([
-            'case_number' => ['nullable', 'string', 'max:100', Rule::unique('patrol_case_reports', 'pcr_case_number')],
             'details' => ['required', 'string', 'max:5000'],
+            'conflict_type' => ['nullable', 'string', 'max:100'],
+            'rescue_conducted' => ['nullable', 'boolean'],
+            'species_rescued' => ['nullable', 'string', 'max:100'],
+            'rehab_details' => ['nullable', 'string', 'max:2000'],
+            'response_time' => ['nullable', 'date_format:H:i'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'photos' => ['required', 'array', 'min:1', 'max:10'],
-            'photos.*' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            'photos' => ['sometimes', 'array', 'max:10'],
+            'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
         $caseReport = DB::transaction(function () use ($validated, $entry, $request) {
             $caseReport = PatrolCaseReports::create([
                 'pcr_entry_id' => $entry->pe_id,
                 'pcr_reported_by' => $request->user()->u_id,
-                'pcr_case_number' => $validated['case_number'] ?? null,
+                'pcr_case_number' => $this->generateCaseNumber(),
                 'pcr_details' => $validated['details'],
+                'pcr_conflict_type' => $validated['conflict_type'] ?? null,
+                'pcr_rescue_conducted' => $validated['rescue_conducted'] ?? null,
+                'pcr_species_rescued' => $validated['species_rescued'] ?? null,
+                'pcr_rehab_details' => $validated['rehab_details'] ?? null,
+                'pcr_response_time' => $validated['response_time'] ?? null,
                 'pcr_latitude' => $validated['latitude'],
                 'pcr_longitude' => $validated['longitude'],
                 'pcr_reported_at' => now(),
             ]);
 
-            foreach ($validated['photos'] as $photo) {
+            foreach ($validated['photos'] ?? [] as $photo) {
                 $stored = $this->photos->compressAndStore($photo, 'patrol-case-media/'.$entry->pe_id);
 
                 PatrolCaseMedia::create([
@@ -326,6 +581,7 @@ class PatrolEntryController extends Controller
             'end_latitude' => ['required', 'numeric', 'between:-90,90'],
             'end_longitude' => ['required', 'numeric', 'between:-180,180'],
             'area_patrolled' => ['nullable', 'string', 'max:5000'],
+            'report' => ['nullable', 'string', 'max:5000'],
             'vehicle_odometers' => ['sometimes', 'array'],
             'vehicle_odometers.*.pev_id' => ['required_with:vehicle_odometers', 'uuid'],
             'vehicle_odometers.*.end_odometer' => ['required_with:vehicle_odometers', 'numeric', 'min:0', 'max:9999999.99'],
@@ -362,6 +618,7 @@ class PatrolEntryController extends Controller
                 'pe_end_latitude' => $validated['end_latitude'],
                 'pe_end_longitude' => $validated['end_longitude'],
                 'pe_area_patrolled' => $validated['area_patrolled'] ?? $entry->pe_area_patrolled,
+                'pe_remarks' => $validated['report'] ?? $entry->pe_remarks,
                 'pe_total_distance' => $totalDistance,
                 'pe_ended_at' => now(),
                 'pe_status' => PatrollingEntries::STATUS_COMPLETED,
@@ -379,7 +636,7 @@ class PatrolEntryController extends Controller
             'pe_end_address'
         );
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
 
         return response()->json([
             'success' => true,
@@ -400,6 +657,30 @@ class PatrolEntryController extends Controller
         if ($entry->pe_status !== PatrollingEntries::STATUS_IN_PROGRESS) {
             abort(409, 'This patrol entry has already ended.');
         }
+    }
+
+    private function assertNotCompleted(PatrollingEntries $entry): void
+    {
+        if ($entry->pe_status === PatrollingEntries::STATUS_COMPLETED) {
+            abort(409, 'This patrol entry has already ended.');
+        }
+    }
+
+    /**
+     * Issues the next case number for the current year (e.g. `CASE-2026-00042`)
+     * from the {@see CaseNumberSequence} master, locking the row so
+     * concurrent case reports never collide.
+     */
+    private function generateCaseNumber(): string
+    {
+        $year = (int) now()->year;
+
+        CaseNumberSequence::firstOrCreate(['cns_year' => $year], ['cns_last_number' => 0]);
+
+        $sequence = CaseNumberSequence::where('cns_year', $year)->lockForUpdate()->first();
+        $sequence->increment('cns_last_number');
+
+        return sprintf('CASE-%d-%05d', $year, $sequence->cns_last_number);
     }
 
     private function generatePatrolId(Ranges $range, $user, string $date): string

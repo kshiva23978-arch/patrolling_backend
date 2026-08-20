@@ -19,6 +19,11 @@ class PatrolCaseReportResource extends JsonResource
             'entry_id' => $this->pcr_entry_id,
             'case_number' => $this->pcr_case_number,
             'details' => $this->pcr_details,
+            'conflict_type' => $this->pcr_conflict_type,
+            'rescue_conducted' => $this->pcr_rescue_conducted,
+            'species_rescued' => $this->pcr_species_rescued,
+            'rehab_details' => $this->pcr_rehab_details,
+            'response_time' => $this->pcr_response_time,
             'location' => [
                 'latitude' => $this->pcr_latitude,
                 'longitude' => $this->pcr_longitude,
