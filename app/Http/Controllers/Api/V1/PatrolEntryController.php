@@ -39,7 +39,7 @@ class PatrolEntryController extends Controller
     {
         $entries = PatrollingEntries::query()
             ->where('pe_patrol_leader_id', $request->user()->u_id)
-            ->with(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle'])
+            ->with(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints'])
             ->latest('pe_created_at')
             ->paginate(15);
 
@@ -109,6 +109,8 @@ class PatrolEntryController extends Controller
                 'staff_names' => 'Number of named staff cannot exceed the staff deployed count.',
             ]);
         }
+
+        $this->assertNoDuplicateVehicleRegistrations($validated['vehicles'] ?? []);
 
         $range = Ranges::findOrFail($validated['pe_range_id']);
 
@@ -291,10 +293,13 @@ class PatrolEntryController extends Controller
 
     /**
      * Update the patrol modes, deployed staff names/in-charge, and/or
-     * vehicles for a pending or in-progress entry. Vehicles passed here are
-     * added alongside any already attached to the entry, and staff names
-     * already saved can never be dropped from the list — both can only
-     * grow once the patrol is created.
+     * vehicles for a pending or in-progress entry — freely editable (added,
+     * renamed, or removed) any time up until the patrol ends. `mode_ids` and
+     * `staff_names`, when present, fully replace the existing list. Each
+     * item in `vehicles` either edits an existing vehicle (when it carries
+     * an `id` already on this entry) or adds a new one (when it doesn't);
+     * `remove_vehicle_ids` deletes vehicles outright — removing whichever
+     * one is currently the active travel mode clears that selection.
      */
     public function update(Request $request, PatrollingEntries $entry)
     {
@@ -308,25 +313,18 @@ class PatrolEntryController extends Controller
             'staff_names.*' => ['string', 'max:150'],
             'incharge_staff' => ['sometimes', 'nullable', 'string', 'max:150'],
             'vehicles' => ['sometimes', 'array'],
+            'vehicles.*.id' => ['sometimes', 'uuid'],
             'vehicles.*.type' => ['required_with:vehicles', Rule::in(['4_wheeler', 'boat'])],
             'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
             'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+            'remove_vehicle_ids' => ['sometimes', 'array'],
+            'remove_vehicle_ids.*' => ['uuid'],
         ]);
 
         if (isset($validated['staff_names']) && count($validated['staff_names']) > $entry->pe_staff_deployed_count) {
             throw ValidationException::withMessages([
                 'staff_names' => 'Number of named staff cannot exceed the staff deployed count.',
             ]);
-        }
-
-        if (isset($validated['staff_names'])) {
-            $missing = array_diff($entry->pe_staff_names ?? [], $validated['staff_names']);
-
-            if (! empty($missing)) {
-                throw ValidationException::withMessages([
-                    'staff_names' => 'Staff already added cannot be removed: '.implode(', ', $missing),
-                ]);
-            }
         }
 
         if (array_key_exists('incharge_staff', $validated) && $validated['incharge_staff'] !== null) {
@@ -342,6 +340,30 @@ class PatrolEntryController extends Controller
         $range = $entry->range;
         $vehiclesInput = $validated['vehicles'] ?? [];
 
+        $this->assertNoDuplicateVehicleRegistrations($vehiclesInput);
+
+        $removingIds = $validated['remove_vehicle_ids'] ?? [];
+        $editingIds = array_filter(array_column($vehiclesInput, 'id'));
+
+        foreach ($vehiclesInput as $vehicleInput) {
+            if (! empty($vehicleInput['id'])) {
+                continue;
+            }
+
+            $key = strtoupper(trim($vehicleInput['registration_no']));
+
+            $alreadyAttached = $entry->vehicles()
+                ->whereNotIn('pev_id', array_merge($removingIds, $editingIds))
+                ->whereHas('vehicle', fn ($q) => $q->where('vh_registration_number', $key))
+                ->exists();
+
+            if ($alreadyAttached) {
+                throw ValidationException::withMessages([
+                    'vehicles' => "Vehicle \"{$vehicleInput['registration_no']}\" is already on this patrol — edit it instead of adding it again.",
+                ]);
+            }
+        }
+
         DB::transaction(function () use ($entry, $validated, $range, $vehiclesInput) {
             if (isset($validated['mode_ids'])) {
                 $entry->modes()->sync($validated['mode_ids']);
@@ -349,6 +371,11 @@ class PatrolEntryController extends Controller
 
             if (isset($validated['staff_names'])) {
                 $entry->pe_staff_names = $validated['staff_names'];
+
+                if ($entry->pe_incharge_staff !== null && ! in_array($entry->pe_incharge_staff, $validated['staff_names'], true)) {
+                    $entry->pe_incharge_staff = null;
+                }
+
                 $entry->save();
             }
 
@@ -368,12 +395,41 @@ class PatrolEntryController extends Controller
                     ]
                 );
 
-                PatrolEntryVehicles::create([
-                    'pev_entry_id' => $entry->pe_id,
-                    'pev_vehicle_id' => $vehicle->vh_id,
-                    'pev_vehicle_type' => $vehicleInput['type'],
-                    'pev_start_odometer' => $vehicleInput['start_odometer'] ?? null,
-                ]);
+                if (! empty($vehicleInput['id'])) {
+                    $entryVehicle = $entry->vehicles()->where('pev_id', $vehicleInput['id'])->first();
+
+                    if (! $entryVehicle) {
+                        throw ValidationException::withMessages([
+                            'vehicles' => 'One of the vehicles being edited does not belong to this patrol entry.',
+                        ]);
+                    }
+
+                    $entryVehicle->update([
+                        'pev_vehicle_id' => $vehicle->vh_id,
+                        'pev_vehicle_type' => $vehicleInput['type'],
+                        'pev_start_odometer' => $vehicleInput['start_odometer'] ?? null,
+                    ]);
+                } else {
+                    PatrolEntryVehicles::create([
+                        'pev_entry_id' => $entry->pe_id,
+                        'pev_vehicle_id' => $vehicle->vh_id,
+                        'pev_vehicle_type' => $vehicleInput['type'],
+                        'pev_start_odometer' => $vehicleInput['start_odometer'] ?? null,
+                    ]);
+                }
+            }
+
+            if (! empty($validated['remove_vehicle_ids'])) {
+                $toRemove = $entry->vehicles()->whereIn('pev_id', $validated['remove_vehicle_ids'])->get();
+
+                foreach ($toRemove as $vehicle) {
+                    if ($entry->pe_current_vehicle_id === $vehicle->pev_id) {
+                        $entry->pe_current_travel_mode = null;
+                        $entry->pe_current_vehicle_id = null;
+                        $entry->save();
+                    }
+                    $vehicle->delete();
+                }
             }
         });
 
@@ -663,6 +719,34 @@ class PatrolEntryController extends Controller
     {
         if ($entry->pe_status === PatrollingEntries::STATUS_COMPLETED) {
             abort(409, 'This patrol entry has already ended.');
+        }
+    }
+
+    /**
+     * Rejects a `vehicles` payload that lists the same registration number
+     * more than once — guards against a double-tapped save (or a copy/paste
+     * mistake) turning into two separate rows for what's really one vehicle.
+     *
+     * @param  array<int, array{registration_no?: string}>  $vehicles
+     */
+    private function assertNoDuplicateVehicleRegistrations(array $vehicles): void
+    {
+        $seen = [];
+
+        foreach ($vehicles as $vehicleInput) {
+            $key = strtoupper(trim($vehicleInput['registration_no'] ?? ''));
+
+            if ($key === '') {
+                continue;
+            }
+
+            if (isset($seen[$key])) {
+                throw ValidationException::withMessages([
+                    'vehicles' => "Vehicle \"{$vehicleInput['registration_no']}\" is listed more than once.",
+                ]);
+            }
+
+            $seen[$key] = true;
         }
     }
 

@@ -97,6 +97,11 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Reuses the TCP+TLS connection to the remote database across
+            // requests within the same PHP worker process instead of paying
+            // a fresh handshake every time — this is the dominant cost when
+            // DB_HOST is a remote/cloud database rather than localhost.
+            'options' => [PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true)],
         ],
 
         'sqlsrv' => [

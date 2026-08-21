@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Support\Geo;
 
 #[Fillable([
     'pe_id', 'pe_patrol_id', 'pe_patrol_date', 'pe_start_time', 'pe_end_time',
@@ -139,6 +140,46 @@ class PatrollingEntries extends Model
 
     public function routePoints(): HasMany
     {
-        return $this->hasMany(PatrolRoutePoints::class, 'prp_entry_id', 'pe_id');
+        return $this->hasMany(PatrolRoutePoints::class, 'prp_entry_id', 'pe_id')
+            ->orderBy('prp_recorded_at');
+    }
+
+    /**
+     * Distance covered so far, derived from consecutive GPS pings (haversine),
+     * broken down by the travel mode active when each segment was recorded.
+     * Requires the `routePoints` relation to already be loaded.
+     *
+     * @return array{total_km: float, by_mode: array<string, float>}
+     */
+    public function distanceSummary(): array
+    {
+        $points = $this->relationLoaded('routePoints') ? $this->routePoints : collect();
+
+        $totalKm = 0.0;
+        $byMode = [];
+
+        $previous = null;
+
+        foreach ($points as $point) {
+            if ($previous !== null) {
+                $segmentKm = Geo::haversineKm(
+                    (float) $previous->prp_latitude,
+                    (float) $previous->prp_longitude,
+                    (float) $point->prp_latitude,
+                    (float) $point->prp_longitude,
+                );
+
+                $mode = $point->prp_travel_mode ?? 'unknown';
+                $byMode[$mode] = ($byMode[$mode] ?? 0.0) + $segmentKm;
+                $totalKm += $segmentKm;
+            }
+
+            $previous = $point;
+        }
+
+        return [
+            'total_km' => round($totalKm, 3),
+            'by_mode' => array_map(fn ($km) => round($km, 3), $byMode),
+        ];
     }
 }

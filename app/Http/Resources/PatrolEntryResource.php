@@ -63,6 +63,7 @@ class PatrolEntryResource extends JsonResource
                 'address' => $this->pe_end_address,
             ],
             'total_distance' => $this->pe_total_distance,
+            'distance' => $this->whenLoaded('routePoints', fn () => $this->distanceSummary()),
             'incident_occurred' => $this->pe_incident_occurred,
             'case_registered' => $this->pe_case_registered,
             'seizure_made' => $this->pe_seizure_made,
