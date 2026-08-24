@@ -138,6 +138,11 @@ class PatrollingEntries extends Model
         return $this->hasMany(PatrolEntryCustomFieldValue::class, 'pcfv_entry_id', 'pe_id');
     }
 
+    public function notes(): HasMany
+    {
+        return $this->hasMany(PatrolNote::class, 'pn_entry_id', 'pe_id')->orderBy('pn_created_at');
+    }
+
     public function media(): HasMany
     {
         return $this->hasMany(PatrolMedia::class, 'pmd_entry_id', 'pe_id');

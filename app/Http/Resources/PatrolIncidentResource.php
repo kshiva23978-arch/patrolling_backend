@@ -19,6 +19,7 @@ class PatrolIncidentResource extends JsonResource
             'entry_id' => $this->pi_entry_id,
             'name' => $this->pi_name,
             'details' => $this->pi_details,
+            'status' => $this->pi_status,
             'location' => [
                 'latitude' => $this->pi_latitude,
                 'longitude' => $this->pi_longitude,

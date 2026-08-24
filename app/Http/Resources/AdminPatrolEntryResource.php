@@ -79,6 +79,7 @@ class AdminPatrolEntryResource extends JsonResource
                 'id' => $c->pcr_id,
                 'case_number' => $c->pcr_case_number,
                 'details' => $c->pcr_details,
+                'status' => $c->pcr_status,
                 'conflict_type' => $c->pcr_conflict_type,
                 'rescue_conducted' => $c->pcr_rescue_conducted,
                 'species_rescued' => $c->pcr_species_rescued,
@@ -98,6 +99,7 @@ class AdminPatrolEntryResource extends JsonResource
                 'id' => $i->pi_id,
                 'name' => $i->pi_name,
                 'details' => $i->pi_details,
+                'status' => $i->pi_status,
                 'location' => [
                     'latitude' => $i->pi_latitude,
                     'longitude' => $i->pi_longitude,

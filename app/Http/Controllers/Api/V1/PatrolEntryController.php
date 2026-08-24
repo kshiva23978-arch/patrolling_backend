@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PatrolCaseReportResource;
 use App\Http\Resources\PatrolEntryResource;
 use App\Http\Resources\PatrolIncidentResource;
+use App\Http\Resources\PatrolNoteResource;
+use App\Http\Resources\PatrolRoutePointResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
 use App\Models\CaseNumberSequence;
@@ -15,6 +17,7 @@ use App\Models\PatrolEntryVehicles;
 use App\Models\PatrolEntryCustomFieldValue;
 use App\Models\PatrolIncident;
 use App\Models\PatrolIncidentMedia;
+use App\Models\PatrolNote;
 use App\Models\PatrolRoutePoints;
 use App\Models\PatrollingEntries;
 use App\Models\PatrolTypes;
@@ -62,12 +65,31 @@ class PatrolEntryController extends Controller
     {
         $this->authorizeOwner($request, $entry);
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints', 'customFieldValues.customField']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints', 'customFieldValues.customField', 'notes']);
 
         return response()->json([
             'success' => true,
             'message' => 'Patrol entry retrieved successfully.',
             'data' => new PatrolEntryResource($entry),
+        ]);
+    }
+
+    /**
+     * The entry's GPS trail, oldest first — used by the ranger's own
+     * in-patrol map (unlike {@see AdminPatrolEntryController::routePoints},
+     * which any admin can call for any entry, this is scoped to the
+     * authenticated ranger's own patrol).
+     */
+    public function routePoints(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        $points = $entry->routePoints()->with('vehicle')->orderBy('prp_recorded_at')->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Route points retrieved successfully.',
+            'data' => PatrolRoutePointResource::collection($points),
         ]);
     }
 
@@ -496,6 +518,7 @@ class PatrolEntryController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'details' => ['required', 'string', 'max:5000'],
+            'status' => ['sometimes', Rule::in(['open', 'closed'])],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'photo' => ['sometimes', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
@@ -507,6 +530,7 @@ class PatrolEntryController extends Controller
                 'pi_reported_by' => $request->user()->u_id,
                 'pi_name' => $validated['name'],
                 'pi_details' => $validated['details'],
+                'pi_status' => $validated['status'] ?? 'open',
                 'pi_latitude' => $validated['latitude'] ?? null,
                 'pi_longitude' => $validated['longitude'] ?? null,
                 'pi_reported_at' => now(),
@@ -559,6 +583,7 @@ class PatrolEntryController extends Controller
         $validated = $request->validate([
             'details' => ['required', 'string', 'max:5000'],
             'conflict_type' => ['nullable', 'string', 'max:100'],
+            'status' => ['sometimes', Rule::in(['open', 'closed'])],
             'rescue_conducted' => ['nullable', 'boolean'],
             'species_rescued' => ['nullable', 'string', 'max:100'],
             'rehab_details' => ['nullable', 'string', 'max:2000'],
@@ -575,6 +600,7 @@ class PatrolEntryController extends Controller
                 'pcr_reported_by' => $request->user()->u_id,
                 'pcr_case_number' => $this->generateCaseNumber(),
                 'pcr_details' => $validated['details'],
+                'pcr_status' => $validated['status'] ?? 'open',
                 'pcr_conflict_type' => $validated['conflict_type'] ?? null,
                 'pcr_rescue_conducted' => $validated['rescue_conducted'] ?? null,
                 'pcr_species_rescued' => $validated['species_rescued'] ?? null,
@@ -625,6 +651,84 @@ class PatrolEntryController extends Controller
             'message' => 'Case report recorded successfully.',
             'data' => new PatrolCaseReportResource($caseReport),
         ], 201);
+    }
+
+    /**
+     * Logs a free-text note against the patrol — quicker than an incident or
+     * case report, with no location/photo of its own.
+     */
+    public function addNote(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+        $this->assertInProgress($entry);
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $note = PatrolNote::create([
+            'pn_entry_id' => $entry->pe_id,
+            'pn_author_id' => $request->user()->u_id,
+            'pn_text' => $validated['text'],
+            'pn_created_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Note recorded successfully.',
+            'data' => new PatrolNoteResource($note),
+        ], 201);
+    }
+
+    /**
+     * Marks an incident open or closed. Unlike most edits made during an
+     * active patrol, this is allowed any time the ranger owns the entry
+     * (not just while it's in progress) — a closed-out patrol's incidents
+     * can still be marked resolved afterward.
+     */
+    public function updateIncidentStatus(Request $request, PatrollingEntries $entry, PatrolIncident $incident)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($incident->pi_entry_id !== $entry->pe_id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['open', 'closed'])],
+        ]);
+
+        $incident->update(['pi_status' => $validated['status']]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Incident status updated.',
+            'data' => new PatrolIncidentResource($incident->fresh()),
+        ]);
+    }
+
+    /**
+     * Marks a case report open or closed — see {@see updateIncidentStatus}.
+     */
+    public function updateCaseReportStatus(Request $request, PatrollingEntries $entry, PatrolCaseReports $caseReport)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($caseReport->pcr_entry_id !== $entry->pe_id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['open', 'closed'])],
+        ]);
+
+        $caseReport->update(['pcr_status' => $validated['status']]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Case status updated.',
+            'data' => new PatrolCaseReportResource($caseReport->fresh()),
+        ]);
     }
 
     /**

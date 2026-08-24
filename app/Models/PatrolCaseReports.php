@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 #[Fillable([
-    'pcr_id', 'pcr_entry_id', 'pcr_reported_by', 'pcr_case_number', 'pcr_details',
+    'pcr_id', 'pcr_entry_id', 'pcr_reported_by', 'pcr_case_number', 'pcr_details', 'pcr_status',
     'pcr_conflict_type', 'pcr_rescue_conducted', 'pcr_species_rescued', 'pcr_rehab_details', 'pcr_response_time',
     'pcr_latitude', 'pcr_longitude', 'pcr_address', 'pcr_reported_at', 'pcr_created_at', 'pcr_updated_at',
 ])]

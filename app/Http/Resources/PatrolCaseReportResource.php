@@ -19,6 +19,7 @@ class PatrolCaseReportResource extends JsonResource
             'entry_id' => $this->pcr_entry_id,
             'case_number' => $this->pcr_case_number,
             'details' => $this->pcr_details,
+            'status' => $this->pcr_status,
             'conflict_type' => $this->pcr_conflict_type,
             'rescue_conducted' => $this->pcr_rescue_conducted,
             'species_rescued' => $this->pcr_species_rescued,

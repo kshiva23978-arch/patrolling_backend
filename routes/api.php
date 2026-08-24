@@ -91,7 +91,11 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/patrol-entries/{entry}/current-travel-mode', [PatrolEntryController::class, 'setCurrentTravelMode']);
     Route::post('/patrol-entries/{entry}/end', [PatrolEntryController::class, 'endPatrol']);
     Route::post('/patrol-entries/{entry}/incidents', [PatrolEntryController::class, 'addIncident']);
+    Route::patch('/patrol-entries/{entry}/incidents/{incident}/status', [PatrolEntryController::class, 'updateIncidentStatus']);
     Route::post('/patrol-entries/{entry}/cases', [PatrolEntryController::class, 'addCaseReport']);
+    Route::patch('/patrol-entries/{entry}/cases/{caseReport}/status', [PatrolEntryController::class, 'updateCaseReportStatus']);
+    Route::post('/patrol-entries/{entry}/notes', [PatrolEntryController::class, 'addNote']);
+    Route::get('/patrol-entries/{entry}/route-points', [PatrolEntryController::class, 'routePoints']);
 
     Route::middleware('throttle:20,1')->group(function () {
         Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);

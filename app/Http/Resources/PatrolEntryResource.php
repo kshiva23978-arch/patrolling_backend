@@ -72,6 +72,7 @@ class PatrolEntryResource extends JsonResource
                 'id' => $c->pcr_id,
                 'case_number' => $c->pcr_case_number,
                 'details' => $c->pcr_details,
+                'status' => $c->pcr_status,
                 'conflict_type' => $c->pcr_conflict_type,
                 'rescue_conducted' => $c->pcr_rescue_conducted,
                 'species_rescued' => $c->pcr_species_rescued,
@@ -84,8 +85,14 @@ class PatrolEntryResource extends JsonResource
                 'id' => $i->pi_id,
                 'name' => $i->pi_name,
                 'details' => $i->pi_details,
+                'status' => $i->pi_status,
                 'photo_count' => $i->relationLoaded('media') ? $i->media->count() : 0,
                 'reported_at' => $i->pi_reported_at?->toISOString(),
+            ])),
+            'notes' => $this->whenLoaded('notes', fn () => $this->notes->map(fn ($n) => [
+                'id' => $n->pn_id,
+                'text' => $n->pn_text,
+                'created_at' => $n->pn_created_at?->toISOString(),
             ])),
             'custom_field_values' => $this->whenLoaded('customFieldValues', fn () => $this->customFieldValues->map(fn ($v) => [
                 'custom_field_id' => $v->pcfv_custom_field_id,
