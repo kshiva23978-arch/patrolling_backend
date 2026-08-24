@@ -85,6 +85,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
 
     Route::get('/patrol-entries', [PatrolEntryController::class, 'index']);
     Route::post('/patrol-entries', [PatrolEntryController::class, 'store']);
+    Route::get('/patrol-entries/field-suggestions', [PatrolEntryController::class, 'fieldSuggestions']);
     Route::get('/patrol-entries/{entry}', [PatrolEntryController::class, 'show']);
     Route::patch('/patrol-entries/{entry}', [PatrolEntryController::class, 'update']);
     Route::post('/patrol-entries/{entry}/start', [PatrolEntryController::class, 'startPatrol']);

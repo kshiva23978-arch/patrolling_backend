@@ -39,6 +39,85 @@ class PatrolEntryController extends Controller
     ) {}
 
     /**
+     * Free-text values already used for [field] within [range_id] (Flutter
+     * field app) — powers autocomplete suggestions on Staff Deployed names,
+     * incident name/details, and case conflict type/details/species so a
+     * ranger reusing a common value doesn't have to retype it. Ranked by
+     * how often each value has been used in this range, most-used first.
+     * Scoped only to the range (like {@see VehicleController::forApp}), not
+     * to the requesting ranger — a value any ranger recorded in this range
+     * is worth suggesting to another.
+     */
+    public function fieldSuggestions(Request $request)
+    {
+        $validated = $request->validate([
+            'range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
+            'field' => ['required', Rule::in([
+                'staff_name', 'incident_name', 'incident_details',
+                'case_conflict_type', 'case_details', 'case_species',
+            ])],
+        ]);
+
+        $rangeId = $validated['range_id'];
+        $limit = 20;
+
+        $inRange = fn ($q) => $q->where('pe_range_id', $rangeId);
+
+        $values = match ($validated['field']) {
+            'staff_name' => PatrollingEntries::where('pe_range_id', $rangeId)
+                ->whereNotNull('pe_staff_names')
+                ->pluck('pe_staff_names')
+                ->flatten()
+                ->map(fn ($name) => trim((string) $name))
+                ->filter(fn ($name) => $name !== '')
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->take($limit)
+                ->values()
+                ->all(),
+            'incident_name' => $this->rankedDistinctValues(
+                PatrolIncident::whereHas('entry', $inRange), 'pi_name', $limit,
+            ),
+            'incident_details' => $this->rankedDistinctValues(
+                PatrolIncident::whereHas('entry', $inRange), 'pi_details', $limit,
+            ),
+            'case_conflict_type' => $this->rankedDistinctValues(
+                PatrolCaseReports::whereHas('entry', $inRange), 'pcr_conflict_type', $limit,
+            ),
+            'case_details' => $this->rankedDistinctValues(
+                PatrolCaseReports::whereHas('entry', $inRange), 'pcr_details', $limit,
+            ),
+            'case_species' => $this->rankedDistinctValues(
+                PatrolCaseReports::whereHas('entry', $inRange), 'pcr_species_rescued', $limit,
+            ),
+        };
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Suggestions retrieved successfully.',
+            'data' => $values,
+        ]);
+    }
+
+    /**
+     * The [$limit] most-used non-empty values of [$column] on [$query],
+     * most-used first.
+     */
+    private function rankedDistinctValues($query, string $column, int $limit): array
+    {
+        return $query->whereNotNull($column)
+            ->where($column, '!=', '')
+            ->select($column)
+            ->selectRaw('COUNT(*) as usage_count')
+            ->groupBy($column)
+            ->orderByDesc('usage_count')
+            ->limit($limit)
+            ->pluck($column)
+            ->all();
+    }
+
+    /**
      * Entries created by the currently authenticated field user.
      */
     public function index(Request $request)
