@@ -18,6 +18,7 @@ use App\Models\PatrolEntryCustomFieldValue;
 use App\Models\PatrolIncident;
 use App\Models\PatrolIncidentMedia;
 use App\Models\PatrolNote;
+use App\Models\PatrolNumberSequence;
 use App\Models\PatrolRoutePoints;
 use App\Models\PatrollingEntries;
 use App\Models\PatrolTypes;
@@ -160,7 +161,7 @@ class PatrolEntryController extends Controller
 
         $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput) {
             $entry = PatrollingEntries::create([
-                'pe_patrol_id' => $this->generatePatrolId($range, $user, $validated['pe_patrol_date']),
+                'pe_patrol_id' => $this->generatePatrolId($range, $validated['pe_patrol_date']),
                 'pe_patrol_date' => $validated['pe_patrol_date'],
                 'pe_start_time' => $validated['pe_start_time'],
                 'pe_range_id' => $range->rn_id,
@@ -598,7 +599,7 @@ class PatrolEntryController extends Controller
             $caseReport = PatrolCaseReports::create([
                 'pcr_entry_id' => $entry->pe_id,
                 'pcr_reported_by' => $request->user()->u_id,
-                'pcr_case_number' => $this->generateCaseNumber(),
+                'pcr_case_number' => $this->generateCaseNumber($entry->range),
                 'pcr_details' => $validated['details'],
                 'pcr_status' => $validated['status'] ?? 'open',
                 'pcr_conflict_type' => $validated['conflict_type'] ?? null,
@@ -929,12 +930,13 @@ class PatrolEntryController extends Controller
     }
 
     /**
-     * Issues the next case number for the current year (e.g. `CASE-2026-00042`)
-     * from the {@see CaseNumberSequence} master, locking the row so
-     * concurrent case reports never collide.
+     * Issues the next case number for the current year (e.g.
+     * `CASE-SR-2026-00042`) from the {@see CaseNumberSequence} master,
+     * locking the row so concurrent case reports never collide.
      */
-    private function generateCaseNumber(): string
+    private function generateCaseNumber(Ranges $range): string
     {
+        $rangeCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id));
         $year = (int) now()->year;
 
         CaseNumberSequence::firstOrCreate(['cns_year' => $year], ['cns_last_number' => 0]);
@@ -942,24 +944,24 @@ class PatrolEntryController extends Controller
         $sequence = CaseNumberSequence::where('cns_year', $year)->lockForUpdate()->first();
         $sequence->increment('cns_last_number');
 
-        return sprintf('CASE-%d-%05d', $year, $sequence->cns_last_number);
+        return sprintf('CASE-%s-%d-%05d', $rangeCode, $year, $sequence->cns_last_number);
     }
 
-    private function generatePatrolId(Ranges $range, $user, string $date): string
+    /**
+     * Issues the next patrol id for the range's patrol-date year (e.g.
+     * `PAT-SR-2026-00087`) from the {@see PatrolNumberSequence} master,
+     * locking the row so concurrent patrol creations never collide.
+     */
+    private function generatePatrolId(Ranges $range, string $date): string
     {
-        $rangeCode = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id), 0, 3));
-        $employeeId = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $user->u_employee_id));
-        $datePart = Carbon::parse($date)->format('Ymd');
+        $rangeCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id));
+        $year = (int) Carbon::parse($date)->year;
 
-        $base = $rangeCode.$employeeId.$datePart;
-        $candidate = $base;
-        $suffix = 1;
+        PatrolNumberSequence::firstOrCreate(['pns_year' => $year], ['pns_last_number' => 0]);
 
-        while (PatrollingEntries::where('pe_patrol_id', $candidate)->exists()) {
-            $suffix++;
-            $candidate = $base.'-'.$suffix;
-        }
+        $sequence = PatrolNumberSequence::where('pns_year', $year)->lockForUpdate()->first();
+        $sequence->increment('pns_last_number');
 
-        return $candidate;
+        return sprintf('PAT-%s-%d-%05d', $rangeCode, $year, $sequence->pns_last_number);
     }
 }
