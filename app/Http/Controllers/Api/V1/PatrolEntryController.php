@@ -106,6 +106,7 @@ class PatrolEntryController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
+            'type' => ['sometimes', Rule::in([PatrollingEntries::TYPE_PATROLLING, PatrollingEntries::TYPE_CASE])],
             'pe_patrol_date' => ['required', 'date', 'before_or_equal:today'],
             'pe_start_time' => ['required', 'date_format:H:i'],
             'pe_range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
@@ -127,6 +128,14 @@ class PatrolEntryController extends Controller
             throw ValidationException::withMessages([
                 'pe_range_id' => 'You do not have access to this range.',
             ]);
+        }
+
+        $hasUnfinishedEntry = PatrollingEntries::where('pe_patrol_leader_id', $user->u_id)
+            ->whereIn('pe_status', [PatrollingEntries::STATUS_PENDING, PatrollingEntries::STATUS_IN_PROGRESS])
+            ->exists();
+
+        if ($hasUnfinishedEntry) {
+            abort(409, 'You already have a patrol or case that has not ended yet. End it before creating a new one.');
         }
 
         if (isset($validated['staff_names']) && count($validated['staff_names']) > $validated['pe_staff_deployed_count']) {
@@ -162,6 +171,7 @@ class PatrolEntryController extends Controller
         $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput) {
             $entry = PatrollingEntries::create([
                 'pe_patrol_id' => $this->generatePatrolId($range, $validated['pe_patrol_date']),
+                'pe_type' => $validated['type'] ?? PatrollingEntries::TYPE_PATROLLING,
                 'pe_patrol_date' => $validated['pe_patrol_date'],
                 'pe_start_time' => $validated['pe_start_time'],
                 'pe_range_id' => $range->rn_id,

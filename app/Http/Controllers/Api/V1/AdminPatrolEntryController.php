@@ -44,6 +44,7 @@ class AdminPatrolEntryController extends Controller
         }
 
         $entries = PatrollingEntries::query()
+            ->where('pe_type', PatrollingEntries::TYPE_PATROLLING)
             ->with([
                 'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
                 'patrolLeader.details', 'caseReports.media', 'incidents.media',
@@ -94,6 +95,7 @@ class AdminPatrolEntryController extends Controller
             ->leftJoin('beats as b', 'b.bt_id', '=', 'pe.pe_beat_id')
             ->leftJoin('users as u', 'u.u_id', '=', 'pe.pe_patrol_leader_id')
             ->leftJoin('user_details as ud', 'ud.ud_user_id', '=', 'u.u_id')
+            ->where('pe.pe_type', PatrollingEntries::TYPE_PATROLLING)
             ->when($rangeId, fn ($q, $id) => $q->where('pe.pe_range_id', $id))
             ->when($status, fn ($q, $s) => $q->where('pe.pe_status', $s))
             ->selectRaw("

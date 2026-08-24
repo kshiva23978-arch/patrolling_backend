@@ -17,6 +17,7 @@ class PatrolEntryResource extends JsonResource
         return [
             'id' => $this->pe_id,
             'patrol_id' => $this->pe_patrol_id,
+            'type' => $this->pe_type,
             'status' => $this->pe_status,
             'date' => $this->pe_patrol_date?->toDateString(),
             'start_time' => $this->pe_start_time,

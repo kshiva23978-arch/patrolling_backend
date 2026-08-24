@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 use App\Support\Geo;
 
 #[Fillable([
-    'pe_id', 'pe_patrol_id', 'pe_patrol_date', 'pe_start_time', 'pe_end_time',
+    'pe_id', 'pe_patrol_id', 'pe_type', 'pe_patrol_date', 'pe_start_time', 'pe_end_time',
     'pe_range_id', 'pe_beat_id', 'pe_area_covered', 'pe_patrol_type_id',
     'pe_start_latitude', 'pe_start_longitude', 'pe_end_latitude', 'pe_end_longitude',
     'pe_start_address', 'pe_end_address', 'pe_total_distance',
@@ -25,6 +25,10 @@ use App\Support\Geo;
 class PatrollingEntries extends Model
 {
     use HasFactory;
+
+    public const TYPE_PATROLLING = 'patrolling';
+
+    public const TYPE_CASE = 'case';
 
     public const STATUS_PENDING = 'pending';
 

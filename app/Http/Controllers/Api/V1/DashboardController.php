@@ -16,20 +16,35 @@ class DashboardController extends Controller
      * to the ranger's own patrol entries — patrollings they've logged, plus
      * the cases and incidents ("activities") reported on those entries.
      * Each also carries a day-by-day count for the last 7 days for the
-     * sparkline trend.
+     * sparkline trend. Pass `range_id` (one of the ranger's assigned
+     * ranges) to further scope every count to just that range — the
+     * dashboard's range selector, shown when the ranger has more than one.
      */
     public function stats(Request $request)
     {
-        $userId = $request->user()->u_id;
+        $user = $request->user();
+        $userId = $user->u_id;
+
+        $validated = $request->validate([
+            'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
+        ]);
+
+        $rangeId = $validated['range_id'] ?? null;
+
+        if ($rangeId !== null && ! $user->ranges()->where('rn_id', $rangeId)->exists()) {
+            abort(403, 'You do not have access to this range.');
+        }
+
         $monthStart = Carbon::now()->startOfMonth();
         $monthEnd = Carbon::now()->endOfMonth();
 
-        $patrolEntryIds = PatrollingEntries::query()
+        $entriesQuery = PatrollingEntries::query()
             ->where('pe_patrol_leader_id', $userId)
-            ->pluck('pe_id');
+            ->when($rangeId, fn ($query, $id) => $query->where('pe_range_id', $id));
 
-        $patrollingsThisMonth = PatrollingEntries::query()
-            ->where('pe_patrol_leader_id', $userId)
+        $patrolEntryIds = (clone $entriesQuery)->pluck('pe_id');
+
+        $patrollingsThisMonth = (clone $entriesQuery)
             ->whereBetween('pe_patrol_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->count();
 
@@ -49,10 +64,7 @@ class DashboardController extends Controller
             'data' => [
                 'patrollings' => [
                     'total' => $patrollingsThisMonth,
-                    'trend' => $this->dailyTrend(
-                        PatrollingEntries::query()->where('pe_patrol_leader_id', $userId),
-                        'pe_patrol_date'
-                    ),
+                    'trend' => $this->dailyTrend($entriesQuery, 'pe_patrol_date'),
                 ],
                 'cases' => [
                     'total' => $casesThisMonth,
