@@ -122,12 +122,6 @@ class BeatController extends Controller
 
     public function destroy(Beats $beat)
     {
-        $beat->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Beat deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($beat, 'beat');
     }
 }

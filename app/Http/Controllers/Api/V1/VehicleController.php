@@ -34,6 +34,29 @@ class VehicleController extends Controller
         ]);
     }
 
+    /**
+     * Active vehicles already on record for a range (Flutter field app) —
+     * powers the "Vehicle Number" suggestions in the "Edit Patrol Modes &
+     * Vehicles" sheet, so a returning vehicle doesn't need retyping.
+     */
+    public function forApp(Request $request)
+    {
+        $validated = $request->validate([
+            'range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
+        ]);
+
+        $vehicles = Vehicles::where('vh_range_id', $validated['range_id'])
+            ->where('vh_status', true)
+            ->orderBy('vh_registration_number')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Vehicles retrieved successfully.',
+            'data' => VehicleResource::collection($vehicles),
+        ]);
+    }
+
     public function show(Vehicles $vehicle)
     {
         return response()->json([
@@ -97,12 +120,6 @@ class VehicleController extends Controller
 
     public function destroy(Vehicles $vehicle)
     {
-        $vehicle->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Vehicle deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($vehicle, 'vehicle');
     }
 }

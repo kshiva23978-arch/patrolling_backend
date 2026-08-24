@@ -93,6 +93,11 @@ class Ranges extends Model
         return $this->hasMany(Beats::class, 'bt_range_id', 'rn_id');
     }
 
+    public function customFields(): HasMany
+    {
+        return $this->hasMany(RangeCustomField::class, 'rcf_range_id', 'rn_id');
+    }
+
     public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicles::class, 'vh_range_id', 'rn_id');

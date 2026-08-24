@@ -115,12 +115,6 @@ class AdminController extends Controller
 
     public function destroy(Admin $admin)
     {
-        $admin->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Admin deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($admin, 'admin');
     }
 }

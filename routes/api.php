@@ -1,14 +1,17 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AdminController;
+use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeatController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DesignationsController;
 use App\Http\Controllers\Api\V1\PatrolEntryController;
 use App\Http\Controllers\Api\V1\PatrollingModeController;
 use App\Http\Controllers\Api\V1\PatrolTypeController;
 use App\Http\Controllers\Api\V1\RangeController;
+use App\Http\Controllers\Api\V1\RangeCustomFieldController;
 use App\Http\Controllers\Api\V1\RolesController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserDetailsController;
@@ -56,6 +59,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
     Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
     Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
+
+    Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
+
+    Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
+    Route::post('/custom-fields', [RangeCustomFieldController::class, 'store']);
+    Route::put('/custom-fields/{customField}', [RangeCustomFieldController::class, 'update']);
+    Route::delete('/custom-fields/{customField}', [RangeCustomFieldController::class, 'destroy']);
 });
 
 /*
@@ -65,10 +75,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
 */
 Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('app.logout');
+    Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
     Route::get('/my-ranges', [RangeController::class, 'myRanges']);
     Route::get('/patrol-types', [PatrolTypeController::class, 'forApp']);
     Route::get('/beats', [BeatController::class, 'forApp']);
     Route::get('/patrolling-modes', [PatrollingModeController::class, 'forApp']);
+    Route::get('/custom-fields', [RangeCustomFieldController::class, 'forApp']);
+    Route::get('/vehicles', [VehicleController::class, 'forApp']);
 
     Route::get('/patrol-entries', [PatrolEntryController::class, 'index']);
     Route::post('/patrol-entries', [PatrolEntryController::class, 'store']);

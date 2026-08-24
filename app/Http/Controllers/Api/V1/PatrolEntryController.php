@@ -12,11 +12,13 @@ use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
 use App\Models\PatrolEntryVehicles;
+use App\Models\PatrolEntryCustomFieldValue;
 use App\Models\PatrolIncident;
 use App\Models\PatrolIncidentMedia;
 use App\Models\PatrolRoutePoints;
 use App\Models\PatrollingEntries;
 use App\Models\PatrolTypes;
+use App\Models\RangeCustomField;
 use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
@@ -60,7 +62,7 @@ class PatrolEntryController extends Controller
     {
         $this->authorizeOwner($request, $entry);
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints', 'customFieldValues.customField']);
 
         return response()->json([
             'success' => true,
@@ -93,7 +95,7 @@ class PatrolEntryController extends Controller
             'mode_ids' => ['required', 'array', 'min:1'],
             'mode_ids.*' => ['uuid', 'distinct', 'exists:patrolling_modes,pm_id'],
             'vehicles' => ['sometimes', 'array'],
-            'vehicles.*.type' => ['required_with:vehicles', Rule::in(['4_wheeler', 'boat'])],
+            'vehicles.*.type' => ['required_with:vehicles', Rule::in(['2_wheeler', '4_wheeler', 'boat'])],
             'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
             'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
         ]);
@@ -159,7 +161,7 @@ class PatrolEntryController extends Controller
                         'vh_registration_number' => strtoupper(trim($vehicleInput['registration_no'])),
                     ],
                     [
-                        'vh_type' => $vehicleInput['type'] === '4_wheeler' ? 'vehicle' : 'boat',
+                        'vh_type' => $vehicleInput['type'] === 'boat' ? 'boat' : 'vehicle',
                     ]
                 );
 
@@ -314,7 +316,7 @@ class PatrolEntryController extends Controller
             'incharge_staff' => ['sometimes', 'nullable', 'string', 'max:150'],
             'vehicles' => ['sometimes', 'array'],
             'vehicles.*.id' => ['sometimes', 'uuid'],
-            'vehicles.*.type' => ['required_with:vehicles', Rule::in(['4_wheeler', 'boat'])],
+            'vehicles.*.type' => ['required_with:vehicles', Rule::in(['2_wheeler', '4_wheeler', 'boat'])],
             'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
             'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'remove_vehicle_ids' => ['sometimes', 'array'],
@@ -391,7 +393,7 @@ class PatrolEntryController extends Controller
                         'vh_registration_number' => strtoupper(trim($vehicleInput['registration_no'])),
                     ],
                     [
-                        'vh_type' => $vehicleInput['type'] === '4_wheeler' ? 'vehicle' : 'boat',
+                        'vh_type' => $vehicleInput['type'] === 'boat' ? 'boat' : 'vehicle',
                     ]
                 );
 
@@ -641,7 +643,12 @@ class PatrolEntryController extends Controller
             'vehicle_odometers' => ['sometimes', 'array'],
             'vehicle_odometers.*.pev_id' => ['required_with:vehicle_odometers', 'uuid'],
             'vehicle_odometers.*.end_odometer' => ['required_with:vehicle_odometers', 'numeric', 'min:0', 'max:9999999.99'],
+            'custom_field_values' => ['sometimes', 'array'],
+            'custom_field_values.*.custom_field_id' => ['required_with:custom_field_values', 'uuid'],
+            'custom_field_values.*.value' => ['nullable'],
         ]);
+
+        $customFieldValues = $this->resolveCustomFieldValues($entry, $validated['custom_field_values'] ?? []);
 
         $entryVehicles = $entry->vehicles()->get()->keyBy('pev_id');
 
@@ -661,7 +668,7 @@ class PatrolEntryController extends Controller
             }
         }
 
-        $entry = DB::transaction(function () use ($entry, $validated) {
+        $entry = DB::transaction(function () use ($entry, $validated, $customFieldValues) {
             foreach ($validated['vehicle_odometers'] ?? [] as $reading) {
                 PatrolEntryVehicles::where('pev_id', $reading['pev_id'])
                     ->update(['pev_end_odometer' => $reading['end_odometer']]);
@@ -680,6 +687,13 @@ class PatrolEntryController extends Controller
                 'pe_status' => PatrollingEntries::STATUS_COMPLETED,
             ]);
 
+            foreach ($customFieldValues as $customFieldId => $value) {
+                PatrolEntryCustomFieldValue::updateOrCreate(
+                    ['pcfv_entry_id' => $entry->pe_id, 'pcfv_custom_field_id' => $customFieldId],
+                    ['pcfv_value' => $value]
+                );
+            }
+
             return $entry;
         });
 
@@ -692,13 +706,73 @@ class PatrolEntryController extends Controller
             'pe_end_address'
         );
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'customFieldValues.customField']);
 
         return response()->json([
             'success' => true,
             'message' => 'Patrol ended successfully.',
             'data' => new PatrolEntryResource($entry),
         ]);
+    }
+
+    /**
+     * Validates the `custom_field_values` payload against the entry's
+     * range's active {@see RangeCustomField} definitions — every required
+     * field must carry a non-empty value, a dropdown's value must be one of
+     * its configured options, and any field id not belonging to (or not
+     * active for) this range is rejected outright — then returns the values
+     * to persist, keyed by custom field id and stringified for storage.
+     *
+     * @param  array<int, array{custom_field_id: string, value: mixed}>  $submitted
+     * @return array<string, string>
+     */
+    private function resolveCustomFieldValues(PatrollingEntries $entry, array $submitted): array
+    {
+        $fields = RangeCustomField::where('rcf_range_id', $entry->pe_range_id)
+            ->where('rcf_is_active', true)
+            ->get()
+            ->keyBy('rcf_id');
+
+        $submittedByFieldId = [];
+        foreach ($submitted as $row) {
+            $fieldId = $row['custom_field_id'];
+
+            if (! $fields->has($fieldId)) {
+                throw ValidationException::withMessages([
+                    'custom_field_values' => 'One of the custom fields submitted does not belong to this range.',
+                ]);
+            }
+
+            $submittedByFieldId[$fieldId] = $row['value'] ?? null;
+        }
+
+        $resolved = [];
+
+        foreach ($fields as $fieldId => $field) {
+            $value = $submittedByFieldId[$fieldId] ?? null;
+            $isEmpty = $value === null || $value === '';
+
+            if ($field->rcf_is_required && $isEmpty) {
+                throw ValidationException::withMessages([
+                    'custom_field_values' => "\"{$field->rcf_field_name}\" is required.",
+                ]);
+            }
+
+            if ($isEmpty) {
+                continue;
+            }
+
+            if ($field->rcf_input_type === RangeCustomField::TYPE_DROPDOWN
+                && ! in_array((string) $value, $field->rcf_options ?? [], true)) {
+                throw ValidationException::withMessages([
+                    'custom_field_values' => "\"{$value}\" is not a valid option for \"{$field->rcf_field_name}\".",
+                ]);
+            }
+
+            $resolved[$fieldId] = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+        }
+
+        return $resolved;
     }
 
     private function authorizeOwner(Request $request, PatrollingEntries $entry): void

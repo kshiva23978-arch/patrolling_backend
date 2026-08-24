@@ -100,13 +100,7 @@ class UserDetailsController extends Controller
 
     public function destroy(UserDetails $userDetails)
     {
-        $userDetails->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'User details deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($userDetails, 'user details');
     }
 }
 

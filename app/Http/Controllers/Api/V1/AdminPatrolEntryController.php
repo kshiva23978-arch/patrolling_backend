@@ -64,7 +64,7 @@ class AdminPatrolEntryController extends Controller
     {
         $entry->load([
             'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
-            'patrolLeader.details', 'caseReports.media', 'incidents.media',
+            'patrolLeader.details', 'caseReports.media', 'incidents.media', 'customFieldValues.customField',
         ]);
 
         return response()->json([

@@ -108,12 +108,6 @@ class DesignationsController extends Controller
 
     public function destroy(Designations $designation)
     {
-        $designation->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Designation deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($designation, 'designation');
     }
 }

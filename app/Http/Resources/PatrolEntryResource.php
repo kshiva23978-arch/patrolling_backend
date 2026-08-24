@@ -87,6 +87,12 @@ class PatrolEntryResource extends JsonResource
                 'photo_count' => $i->relationLoaded('media') ? $i->media->count() : 0,
                 'reported_at' => $i->pi_reported_at?->toISOString(),
             ])),
+            'custom_field_values' => $this->whenLoaded('customFieldValues', fn () => $this->customFieldValues->map(fn ($v) => [
+                'custom_field_id' => $v->pcfv_custom_field_id,
+                'field_name' => $v->customField?->rcf_field_name,
+                'input_type' => $v->customField?->rcf_input_type,
+                'value' => $v->pcfv_value,
+            ])),
             'current_travel_mode' => $this->pe_current_travel_mode,
             'current_vehicle_id' => $this->pe_current_vehicle_id,
             'started_at' => $this->pe_started_at?->toISOString(),

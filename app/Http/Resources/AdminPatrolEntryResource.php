@@ -101,6 +101,12 @@ class AdminPatrolEntryResource extends JsonResource
                     : [],
                 'reported_at' => $i->pi_reported_at?->toISOString(),
             ])),
+            'custom_field_values' => $this->whenLoaded('customFieldValues', fn () => $this->customFieldValues->map(fn ($v) => [
+                'custom_field_id' => $v->pcfv_custom_field_id,
+                'field_name' => $v->customField?->rcf_field_name,
+                'input_type' => $v->customField?->rcf_input_type,
+                'value' => $v->pcfv_value,
+            ])),
             'started_at' => $this->pe_started_at?->toISOString(),
             'ended_at' => $this->pe_ended_at?->toISOString(),
             'created_at' => $this->pe_created_at?->toISOString(),

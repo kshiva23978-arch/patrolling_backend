@@ -125,13 +125,7 @@ class PatrolTypeController extends Controller
 
     public function destroy(PatrolTypes $patrolType)
     {
-        $patrolType->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Patrol type deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($patrolType, 'patrol type');
     }
 
     private function syncCategories(PatrolTypes $patrolType, ?array $categories): void

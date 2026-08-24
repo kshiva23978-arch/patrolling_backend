@@ -119,13 +119,7 @@ class RangeController extends Controller
 
     public function destroy(Ranges $range)
     {
-        $range->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Range deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($range, 'range');
     }
 
     /**

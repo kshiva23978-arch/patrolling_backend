@@ -133,6 +133,11 @@ class PatrollingEntries extends Model
         return $this->hasMany(PatrolIncident::class, 'pi_entry_id', 'pe_id');
     }
 
+    public function customFieldValues(): HasMany
+    {
+        return $this->hasMany(PatrolEntryCustomFieldValue::class, 'pcfv_entry_id', 'pe_id');
+    }
+
     public function media(): HasMany
     {
         return $this->hasMany(PatrolMedia::class, 'pmd_entry_id', 'pe_id');

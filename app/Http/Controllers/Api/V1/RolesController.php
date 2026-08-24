@@ -98,12 +98,6 @@ class RolesController extends Controller
 
     public function destroy(Roles $role)
     {
-        $role->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Role deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($role, 'role');
     }
 }

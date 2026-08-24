@@ -87,12 +87,6 @@ class PatrollingModeController extends Controller
 
     public function destroy(PatrollingModes $patrollingMode)
     {
-        $patrollingMode->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Patrolling mode deleted successfully.',
-            'data' => null,
-        ]);
+        return $this->deleteOrConflict($patrollingMode, 'patrolling mode');
     }
 }
