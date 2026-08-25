@@ -16,6 +16,7 @@ class RangeResource extends JsonResource
             'category' => $this->rn_category,
             'range_headquarter' => $this->rn_range_headquarter,
             'key_activities' => $this->rn_key_activities,
+            'boundary' => $this->boundaryGeoJson(),
             'patrolling_modes' => PatrollingModeResource::collection($this->whenLoaded('patrollingModes')),
             'created_at' => $this->rn_created_at?->toISOString(),
             'updated_at' => $this->rn_updated_at?->toISOString(),

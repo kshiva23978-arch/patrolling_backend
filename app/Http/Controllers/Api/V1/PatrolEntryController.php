@@ -185,6 +185,15 @@ class PatrolEntryController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
+            // Optional client-generated id: the app can create a patrol while
+            // offline and start using it locally (for GPS pings, incidents,
+            // etc.) before this request ever reaches the server. Sending the
+            // same id back here — instead of always minting a fresh one —
+            // means the local record and the server record are the same row
+            // from the start, and also makes a retried request (network
+            // dropped after the first attempt actually succeeded) idempotent
+            // rather than a duplicate-create error; see the reuse below.
+            'pe_id' => ['sometimes', 'uuid'],
             'type' => ['sometimes', Rule::in([PatrollingEntries::TYPE_PATROLLING, PatrollingEntries::TYPE_CASE])],
             'pe_patrol_date' => ['required', 'date', 'before_or_equal:today'],
             'pe_start_time' => ['required', 'date_format:H:i'],
@@ -202,6 +211,22 @@ class PatrolEntryController extends Controller
             'vehicles.*.registration_no' => ['required_with:vehicles', 'string', 'max:50'],
             'vehicles.*.start_odometer' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
         ]);
+
+        if (! empty($validated['pe_id'])) {
+            $existing = PatrollingEntries::where('pe_id', $validated['pe_id'])
+                ->where('pe_patrol_leader_id', $user->u_id)
+                ->first();
+
+            if ($existing) {
+                $existing->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media']);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Patrol entry created successfully.',
+                    'data' => new PatrolEntryResource($existing),
+                ], 201);
+            }
+        }
 
         if (! $user->ranges()->where('rn_id', $validated['pe_range_id'])->exists()) {
             throw ValidationException::withMessages([
@@ -249,6 +274,7 @@ class PatrolEntryController extends Controller
 
         $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput) {
             $entry = PatrollingEntries::create([
+                'pe_id' => $validated['pe_id'] ?? null,
                 'pe_patrol_id' => $this->generatePatrolId($range, $validated['pe_patrol_date']),
                 'pe_type' => $validated['type'] ?? PatrollingEntries::TYPE_PATROLLING,
                 'pe_patrol_date' => $validated['pe_patrol_date'],
@@ -327,6 +353,11 @@ class PatrolEntryController extends Controller
         $validated = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
+            // Set when the app started the patrol offline and is only now
+            // syncing — preserves the ranger's real start time instead of
+            // stamping the moment connectivity happened to return. Omitted
+            // (defaulting to now()) for a normal online start.
+            'started_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         $entry->update([
@@ -334,7 +365,7 @@ class PatrolEntryController extends Controller
             'pe_start_latitude' => $validated['latitude'],
             'pe_start_longitude' => $validated['longitude'],
             'pe_status' => PatrollingEntries::STATUS_IN_PROGRESS,
-            'pe_started_at' => now(),
+            'pe_started_at' => $validated['started_at'] ?? now(),
         ]);
 
         ReverseGeocodeLocation::dispatch(

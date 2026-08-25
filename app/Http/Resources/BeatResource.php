@@ -14,6 +14,7 @@ class BeatResource extends JsonResource
             'range_id' => $this->bt_range_id,
             'name' => $this->bt_name,
             'status' => $this->bt_status,
+            'boundary' => $this->boundaryGeoJson(),
             'created_at' => $this->bt_created_at?->toISOString(),
             'updated_at' => $this->bt_updated_at?->toISOString(),
         ];

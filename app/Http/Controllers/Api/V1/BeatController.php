@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BeatResource;
 use App\Models\Beats;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class BeatController extends Controller
 {
@@ -69,6 +70,9 @@ class BeatController extends Controller
             'bt_range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
             'bt_name' => ['required', 'string', 'max:255'],
             'bt_status' => ['sometimes', 'boolean'],
+            'bt_boundary' => ['sometimes', 'nullable', 'array'],
+            'bt_boundary.type' => ['required_with:bt_boundary', 'in:Polygon'],
+            'bt_boundary.coordinates' => ['required_with:bt_boundary', 'array', 'min:1'],
         ]);
 
         $exists = Beats::where('bt_range_id', $validated['bt_range_id'])
@@ -89,6 +93,10 @@ class BeatController extends Controller
             'bt_status' => $validated['bt_status'] ?? true,
         ]);
 
+        if (array_key_exists('bt_boundary', $validated)) {
+            $this->setBoundary($beat, $validated['bt_boundary']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Beat created successfully.',
@@ -101,6 +109,9 @@ class BeatController extends Controller
         $validated = $request->validate([
             'bt_name' => ['sometimes', 'string', 'max:255'],
             'bt_status' => ['sometimes', 'boolean'],
+            'bt_boundary' => ['sometimes', 'nullable', 'array'],
+            'bt_boundary.type' => ['required_with:bt_boundary', 'in:Polygon'],
+            'bt_boundary.coordinates' => ['required_with:bt_boundary', 'array', 'min:1'],
         ]);
 
         if (isset($validated['bt_name'])) {
@@ -113,6 +124,10 @@ class BeatController extends Controller
 
         $beat->save();
 
+        if (array_key_exists('bt_boundary', $validated)) {
+            $this->setBoundary($beat, $validated['bt_boundary']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Beat updated successfully.',
@@ -123,5 +138,23 @@ class BeatController extends Controller
     public function destroy(Beats $beat)
     {
         return $this->deleteOrConflict($beat, 'beat');
+    }
+
+    /**
+     * [$geojson] is `null` to clear the boundary, or a validated GeoJSON
+     * `{type: "Polygon", coordinates: [...]}` — the coordinates themselves
+     * (ring closure, winding order, in-range lat/lng) are only checked by
+     * `ST_GeomFromGeoJSON` itself, so a malformed shape surfaces as a
+     * validation error here rather than a raw 500.
+     */
+    private function setBoundary(Beats $beat, ?array $geojson): void
+    {
+        try {
+            $beat->setBoundary($geojson);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'bt_boundary' => 'That boundary shape could not be saved. Check that it is a valid polygon.',
+            ]);
+        }
     }
 }

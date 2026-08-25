@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Support\Boundary;
 
 #[Fillable(['rn_id', 'rn_range_id', 'rn_range_name', 'rn_category', 'rn_range_headquarter', 'rn_key_activities', 'rn_created_at', 'rn_updated_at'])]
 class Ranges extends Model
@@ -101,5 +102,17 @@ class Ranges extends Model
     public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicles::class, 'vh_range_id', 'rn_id');
+    }
+
+    /** This range's boundary, as a decoded GeoJSON Polygon — `null` if unset. */
+    public function boundaryGeoJson(): ?array
+    {
+        return Boundary::get('ranges', 'rn_id', $this->rn_id, 'rn_boundary');
+    }
+
+    /** Sets (or clears, given `null`) this range's boundary. */
+    public function setBoundary(?array $geojson): void
+    {
+        Boundary::set('ranges', 'rn_id', $this->rn_id, 'rn_boundary', $geojson);
     }
 }

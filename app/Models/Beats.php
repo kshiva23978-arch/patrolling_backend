@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use App\Support\Boundary;
 
 #[Fillable(['bt_id', 'bt_range_id', 'bt_name', 'bt_status', 'bt_created_at', 'bt_updated_at'])]
 class Beats extends Model
@@ -35,5 +36,17 @@ class Beats extends Model
     public function range(): BelongsTo
     {
         return $this->belongsTo(Ranges::class, 'bt_range_id', 'rn_id');
+    }
+
+    /** This beat's boundary, as a decoded GeoJSON Polygon — `null` if unset. */
+    public function boundaryGeoJson(): ?array
+    {
+        return Boundary::get('beats', 'bt_id', $this->bt_id, 'bt_boundary');
+    }
+
+    /** Sets (or clears, given `null`) this beat's boundary. */
+    public function setBoundary(?array $geojson): void
+    {
+        Boundary::set('beats', 'bt_id', $this->bt_id, 'bt_boundary', $geojson);
     }
 }

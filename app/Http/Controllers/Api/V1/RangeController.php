@@ -7,6 +7,7 @@ use App\Http\Resources\RangeResource;
 use App\Models\Ranges;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RangeController extends Controller
 {
@@ -49,6 +50,9 @@ class RangeController extends Controller
             'rn_category' => ['nullable', Rule::in(Ranges::CATEGORIES)],
             'rn_range_headquarter' => ['required', 'string', 'max:100'],
             'rn_key_activities' => ['nullable', 'string'],
+            'rn_boundary' => ['sometimes', 'nullable', 'array'],
+            'rn_boundary.type' => ['required_with:rn_boundary', 'in:Polygon'],
+            'rn_boundary.coordinates' => ['required_with:rn_boundary', 'array', 'min:1'],
             'patrolling_mode_ids' => ['sometimes', 'array'],
             'patrolling_mode_ids.*' => ['string', 'uuid', 'exists:patrolling_modes,pm_id'],
         ]);
@@ -60,6 +64,10 @@ class RangeController extends Controller
             'rn_range_headquarter' => trim($validated['rn_range_headquarter']),
             'rn_key_activities' => $validated['rn_key_activities'] ?? null,
         ]);
+
+        if (array_key_exists('rn_boundary', $validated)) {
+            $this->setBoundary($range, $validated['rn_boundary']);
+        }
 
         if (isset($validated['patrolling_mode_ids'])) {
             $range->patrollingModes()->sync($validated['patrolling_mode_ids']);
@@ -80,6 +88,9 @@ class RangeController extends Controller
             'rn_category' => ['sometimes', 'nullable', Rule::in(Ranges::CATEGORIES)],
             'rn_range_headquarter' => ['sometimes', 'string', 'max:100'],
             'rn_key_activities' => ['sometimes', 'nullable', 'string'],
+            'rn_boundary' => ['sometimes', 'nullable', 'array'],
+            'rn_boundary.type' => ['required_with:rn_boundary', 'in:Polygon'],
+            'rn_boundary.coordinates' => ['required_with:rn_boundary', 'array', 'min:1'],
             'patrolling_mode_ids' => ['sometimes', 'array'],
             'patrolling_mode_ids.*' => ['string', 'uuid', 'exists:patrolling_modes,pm_id'],
         ]);
@@ -106,6 +117,10 @@ class RangeController extends Controller
 
         $range->save();
 
+        if (array_key_exists('rn_boundary', $validated)) {
+            $this->setBoundary($range, $validated['rn_boundary']);
+        }
+
         if (isset($validated['patrolling_mode_ids'])) {
             $range->patrollingModes()->sync($validated['patrolling_mode_ids']);
         }
@@ -120,6 +135,18 @@ class RangeController extends Controller
     public function destroy(Ranges $range)
     {
         return $this->deleteOrConflict($range, 'range');
+    }
+
+    /** See {@see \App\Http\Controllers\Api\V1\BeatController::setBoundary()}. */
+    private function setBoundary(Ranges $range, ?array $geojson): void
+    {
+        try {
+            $range->setBoundary($geojson);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'rn_boundary' => 'That boundary shape could not be saved. Check that it is a valid polygon.',
+            ]);
+        }
     }
 
     /**
