@@ -589,7 +589,7 @@ class PatrolEntryController extends Controller
 
     /**
      * Record a live GPS ping while the patrol is in progress (the app polls
-     * this every 30s). Snapshots the entry's current travel mode/vehicle at
+     * this every 5s). Snapshots the entry's current travel mode/vehicle at
      * ping time — set via {@see setCurrentTravelMode} — so the route trail
      * shows how the ranger was traveling at each point, even if that
      * changes mid-patrol.

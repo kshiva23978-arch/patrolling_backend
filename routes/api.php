@@ -112,7 +112,5 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::delete('/activities/{activity}/participants/{participant}', [ActivityController::class, 'removeParticipant']);
     Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
 
-    Route::middleware('throttle:20,1')->group(function () {
-        Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
-    });
+    Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
 });
