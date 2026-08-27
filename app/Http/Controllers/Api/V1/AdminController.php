@@ -8,7 +8,6 @@ use App\Models\Admin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class AdminController extends Controller
 {
@@ -51,9 +50,15 @@ class AdminController extends Controller
 
     public function store(Request $request)
     {
+        // `a_password_hash` arrives as the SHA-256 hex digest of the admin's
+        // chosen password (see the frontend's equivalent of the app's
+        // `hashPassword` helper) — never the plaintext, so there's nothing
+        // here to check complexity (mixed case/symbols/etc.) against
+        // server-side; that has to be enforced client-side, before hashing.
+        // `min:8` is just a sanity floor against an empty/garbage value.
         $validated = $request->validate([
             'a_employee_id' => ['required', 'string', 'max:255', Rule::unique('admins', 'a_employee_id')],
-            'a_password_hash' => ['required', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
+            'a_password_hash' => ['required', 'string', 'min:8'],
             'a_role_id' => ['nullable', 'string'],
             'a_designation_id' => ['nullable', 'string'],
             'a_status' => ['sometimes', 'boolean'],
@@ -78,7 +83,7 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'a_employee_id' => ['sometimes', 'string', 'max:255', Rule::unique('admins', 'a_employee_id')->ignore($admin->a_id, 'a_id')],
-            'a_password_hash' => ['sometimes', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
+            'a_password_hash' => ['sometimes', 'string', 'min:8'],
             'a_role_id' => ['sometimes', 'string'],
             'a_designation_id' => ['sometimes', 'string'],
             'a_status' => ['sometimes', 'boolean'],

@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
@@ -51,9 +50,15 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        // `u_password_hash` arrives as the SHA-256 hex digest of the
+        // ranger's chosen password (see the app's `hashPassword` helper) —
+        // never the plaintext, so there's nothing here to check complexity
+        // (mixed case/symbols/etc.) against server-side; that has to be
+        // enforced client-side, before hashing. `min:8` is just a sanity
+        // floor against an empty/garbage value.
         $validated = $request->validate([
             'u_employee_id' => ['required', 'string', 'max:255', Rule::unique('users', 'u_employee_id')],
-            'u_password_hash' => ['required', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
+            'u_password_hash' => ['required', 'string', 'min:8'],
             'u_role_id' => ['nullable', 'string'],
             'u_designation_id' => ['nullable', 'string'],
             'u_status' => ['sometimes', 'boolean'],
@@ -78,7 +83,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'u_employee_id' => ['sometimes', 'string', 'max:255', Rule::unique('users', 'u_employee_id')->ignore($user->u_id, 'u_id')],
-            'u_password_hash' => ['sometimes', 'string', Password::min(8)->mixedCase()->numbers()->symbols()],
+            'u_password_hash' => ['sometimes', 'string', 'min:8'],
             'u_role_id' => ['sometimes', 'string'],
             'u_designation_id' => ['sometimes', 'string'],
             'u_status' => ['sometimes', 'boolean'],
