@@ -642,7 +642,8 @@ class PatrolEntryController extends Controller
             'status' => ['sometimes', Rule::in(['open', 'closed'])],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'photo' => ['sometimes', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            'photos' => ['sometimes', 'array', 'max:10'],
+            'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
         $incident = DB::transaction(function () use ($validated, $entry, $request) {
@@ -657,8 +658,8 @@ class PatrolEntryController extends Controller
                 'pi_reported_at' => now(),
             ]);
 
-            if ($request->hasFile('photo')) {
-                $stored = $this->photos->compressAndStore($request->file('photo'), 'patrol-incident-media/'.$entry->pe_id);
+            foreach ($validated['photos'] ?? [] as $photo) {
+                $stored = $this->photos->compressAndStore($photo, 'patrol-incident-media/'.$entry->pe_id);
 
                 PatrolIncidentMedia::create([
                     'pim_incident_id' => $incident->pi_id,
