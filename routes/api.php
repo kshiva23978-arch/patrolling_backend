@@ -94,6 +94,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/patrol-entries/field-suggestions', [PatrolEntryController::class, 'fieldSuggestions']);
     Route::get('/patrol-entries/{entry}', [PatrolEntryController::class, 'show']);
     Route::patch('/patrol-entries/{entry}', [PatrolEntryController::class, 'update']);
+    Route::delete('/patrol-entries/{entry}', [PatrolEntryController::class, 'destroy']);
     Route::post('/patrol-entries/{entry}/start', [PatrolEntryController::class, 'startPatrol']);
     Route::patch('/patrol-entries/{entry}/current-travel-mode', [PatrolEntryController::class, 'setCurrentTravelMode']);
     Route::post('/patrol-entries/{entry}/end', [PatrolEntryController::class, 'endPatrol']);

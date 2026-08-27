@@ -124,7 +124,10 @@ class PatrolEntryController extends Controller
     {
         $entries = PatrollingEntries::query()
             ->where('pe_patrol_leader_id', $request->user()->u_id)
-            ->with(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints'])
+            ->with([
+                'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints',
+                'caseReports.media', 'incidents.media', 'notes', 'customFieldValues.customField',
+            ])
             ->latest('pe_created_at')
             ->paginate(15);
 
@@ -406,6 +409,29 @@ class PatrolEntryController extends Controller
             'success' => true,
             'message' => 'Patrol started successfully.',
             'data' => new PatrolEntryResource($entry),
+        ]);
+    }
+
+    /**
+     * Deletes a patrol entry the ranger hasn't started yet. Only pending
+     * entries qualify — once GPS tracking begins ({@see startPatrol}) the
+     * patrol has a real record worth keeping, so it can only be ended, not
+     * erased. Cascades to the entry's modes/vehicles/staff via the FKs on
+     * those tables — nothing else can exist yet on a pending entry.
+     */
+    public function destroy(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($entry->pe_status !== PatrollingEntries::STATUS_PENDING) {
+            abort(409, 'Only a patrol that hasn\'t started yet can be deleted.');
+        }
+
+        $entry->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrol entry deleted successfully.',
         ]);
     }
 
