@@ -234,7 +234,22 @@ class PatrolEntryController extends Controller
             ]);
         }
 
+        // Scoped to this device (its own Sanctum token — one per login, see
+        // AuthController::attemptLogin), not the account as a whole: the
+        // same ranger is allowed one unfinished patrol per device (e.g. a
+        // phone and a spare tablet in the field at the same time), just not
+        // two at once from the same one.
+        $tokenId = $user->currentAccessToken()?->id;
+
         $hasUnfinishedEntry = PatrollingEntries::where('pe_patrol_leader_id', $user->u_id)
+            // Falls back to the old account-wide check on the (practically
+            // never happening, for a token-authenticated API request) case
+            // there's no current token to scope by, rather than silently
+            // matching nothing and disabling the restriction outright.
+            ->when(
+                $tokenId !== null,
+                fn ($q) => $q->where('pe_created_via_token_id', $tokenId),
+            )
             ->whereIn('pe_status', [PatrollingEntries::STATUS_PENDING, PatrollingEntries::STATUS_IN_PROGRESS])
             ->exists();
 
@@ -272,7 +287,7 @@ class PatrolEntryController extends Controller
 
         $vehiclesInput = $validated['vehicles'] ?? [];
 
-        $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput) {
+        $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput, $tokenId) {
             $entry = PatrollingEntries::create([
                 'pe_id' => $validated['pe_id'] ?? null,
                 'pe_patrol_id' => $this->generatePatrolId($range, $validated['pe_patrol_date']),
@@ -286,6 +301,7 @@ class PatrolEntryController extends Controller
                 'pe_staff_deployed_count' => $validated['pe_staff_deployed_count'],
                 'pe_staff_names' => $validated['staff_names'] ?? [],
                 'pe_patrol_leader_id' => $user->u_id,
+                'pe_created_via_token_id' => $tokenId,
                 'pe_gps_enabled' => false,
                 'pe_status' => PatrollingEntries::STATUS_PENDING,
             ]);
