@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\AdminActivityController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
@@ -60,6 +62,10 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
     Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
 
+    Route::get('/activities', [AdminActivityController::class, 'index']);
+    Route::get('/activities/{activity}', [AdminActivityController::class, 'show']);
+    Route::get('/activity-media/{media}', [AdminActivityController::class, 'media']);
+
     Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
 
     Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
@@ -97,6 +103,14 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/patrol-entries/{entry}/cases/{caseReport}/status', [PatrolEntryController::class, 'updateCaseReportStatus']);
     Route::post('/patrol-entries/{entry}/notes', [PatrolEntryController::class, 'addNote']);
     Route::get('/patrol-entries/{entry}/route-points', [PatrolEntryController::class, 'routePoints']);
+
+    Route::get('/activities', [ActivityController::class, 'index']);
+    Route::post('/activities', [ActivityController::class, 'store']);
+    Route::get('/activities/{activity}', [ActivityController::class, 'show']);
+    Route::post('/activities/{activity}/end', [ActivityController::class, 'end']);
+    Route::post('/activities/{activity}/participants', [ActivityController::class, 'addParticipant']);
+    Route::delete('/activities/{activity}/participants/{participant}', [ActivityController::class, 'removeParticipant']);
+    Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
 
     Route::middleware('throttle:20,1')->group(function () {
         Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
