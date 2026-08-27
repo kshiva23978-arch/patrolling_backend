@@ -293,12 +293,19 @@ class PatrolEntryController extends Controller
             $entry->modes()->sync($validated['mode_ids']);
 
             foreach ($vehiclesInput as $vehicleInput) {
-                $vehicle = Vehicles::updateOrCreate(
+                // `vh_registration_number` is globally unique (a real vehicle
+                // plate can't belong to two ranges at once) — match on it
+                // alone rather than scoping by range too, or reusing a
+                // registration already on record for a different range would
+                // miss the existing row and collide with that unique
+                // constraint on insert, rolling back the whole request.
+                // firstOrCreate (not updateOrCreate) so an existing vehicle's
+                // type/home range isn't silently rewritten by whichever
+                // patrol borrows it next.
+                $vehicle = Vehicles::firstOrCreate(
+                    ['vh_registration_number' => strtoupper(trim($vehicleInput['registration_no']))],
                     [
                         'vh_range_id' => $range->rn_id,
-                        'vh_registration_number' => strtoupper(trim($vehicleInput['registration_no'])),
-                    ],
-                    [
                         'vh_type' => $vehicleInput['type'] === 'boat' ? 'boat' : 'vehicle',
                     ]
                 );
@@ -530,12 +537,15 @@ class PatrolEntryController extends Controller
             }
 
             foreach ($vehiclesInput as $vehicleInput) {
-                $vehicle = Vehicles::updateOrCreate(
+                // See the matching comment in store() — vh_registration_number
+                // is globally unique, so it must be matched alone rather than
+                // scoped by range, and firstOrCreate rather than
+                // updateOrCreate so this doesn't rewrite an existing
+                // vehicle's type/home range.
+                $vehicle = Vehicles::firstOrCreate(
+                    ['vh_registration_number' => strtoupper(trim($vehicleInput['registration_no']))],
                     [
                         'vh_range_id' => $range->rn_id,
-                        'vh_registration_number' => strtoupper(trim($vehicleInput['registration_no'])),
-                    ],
-                    [
                         'vh_type' => $vehicleInput['type'] === 'boat' ? 'boat' : 'vehicle',
                     ]
                 );
