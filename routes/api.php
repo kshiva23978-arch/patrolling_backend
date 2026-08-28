@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\PatrolTypeController;
 use App\Http\Controllers\Api\V1\RangeController;
 use App\Http\Controllers\Api\V1\RangeCustomFieldController;
 use App\Http\Controllers\Api\V1\RolesController;
+use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserDetailsController;
 use App\Http\Controllers\Api\V1\UserRangeAccessController;
@@ -65,6 +66,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:beats');
     Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:vehicles');
+    Route::apiResource('staff', StaffController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:staff');
 
     Route::middleware('admin.permission:users')->group(function () {
         Route::get('/user-range-access', [UserRangeAccessController::class, 'index']);
@@ -125,6 +128,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/patrolling-modes', [PatrollingModeController::class, 'forApp']);
     Route::get('/custom-fields', [RangeCustomFieldController::class, 'forApp']);
     Route::get('/vehicles', [VehicleController::class, 'forApp']);
+    Route::get('/staff', [StaffController::class, 'forApp']);
 
     Route::get('/patrol-entries', [PatrolEntryController::class, 'index']);
     Route::post('/patrol-entries', [PatrolEntryController::class, 'store']);
