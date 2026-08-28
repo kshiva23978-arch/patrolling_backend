@@ -80,6 +80,31 @@ class AdminActivityController extends Controller
         return Storage::disk($media->acm_disk)->response($media->acm_file_path);
     }
 
+    /**
+     * Deletes an activity outright — its participants and photo rows cascade
+     * at the DB level (see the `activities`-referencing FKs'
+     * `cascadeOnDelete()`), but the photo files on disk don't, so those are
+     * removed explicitly first to avoid leaving them orphaned.
+     */
+    public function destroy(Request $request, Activity $activity)
+    {
+        $this->assertActivityAccessible($request, $activity);
+
+        $activity->load('media');
+
+        foreach ($activity->media as $media) {
+            Storage::disk($media->acm_disk)->delete($media->acm_file_path);
+        }
+
+        $activity->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Activity deleted successfully.',
+            'data' => null,
+        ]);
+    }
+
     /** Aborts with a 403 unless [$activity]'s creator shares a range with [$request]'s admin. */
     private function assertActivityAccessible(Request $request, Activity $activity): void
     {

@@ -103,6 +103,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
         Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
         Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
+        Route::delete('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'destroy']);
     });
 
     Route::middleware('admin.permission:cases')->group(function () {
@@ -112,12 +113,14 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/case-incident-media/{media}', [AdminCaseEntryController::class, 'incidentMedia']);
         Route::get('/case-filing-media/{media}', [AdminCaseEntryController::class, 'filingMedia']);
         Route::get('/case-closing-media/{media}', [AdminCaseEntryController::class, 'closingMedia']);
+        Route::delete('/case-entries/{case}', [AdminCaseEntryController::class, 'destroy']);
     });
 
     Route::middleware('admin.permission:activities')->group(function () {
         Route::get('/activities', [AdminActivityController::class, 'index']);
         Route::get('/activities/{activity}', [AdminActivityController::class, 'show']);
         Route::get('/activity-media/{media}', [AdminActivityController::class, 'media']);
+        Route::delete('/activities/{activity}', [AdminActivityController::class, 'destroy']);
     });
 
     Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats'])

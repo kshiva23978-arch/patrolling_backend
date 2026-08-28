@@ -220,6 +220,39 @@ class AdminPatrolEntryController extends Controller
     }
 
     /**
+     * Deletes a patrol entry outright — its case reports, incidents, route
+     * points, vehicles, notes, and custom field values all cascade at the DB
+     * level (see the `pe_patrolling_entries`-referencing FKs'
+     * `cascadeOnDelete()`), but their photo files on disk don't, so those are
+     * removed explicitly first to avoid leaving them orphaned.
+     */
+    public function destroy(Request $request, PatrollingEntries $entry)
+    {
+        $this->assertRangeAccessible($request, $entry->pe_range_id);
+
+        $entry->load(['caseReports.media', 'incidents.media']);
+
+        foreach ($entry->caseReports as $caseReport) {
+            foreach ($caseReport->media as $media) {
+                Storage::disk($media->pcm_disk)->delete($media->pcm_file_path);
+            }
+        }
+        foreach ($entry->incidents as $incident) {
+            foreach ($incident->media as $media) {
+                Storage::disk($media->pim_disk)->delete($media->pim_file_path);
+            }
+        }
+
+        $entry->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrol entry deleted successfully.',
+            'data' => null,
+        ]);
+    }
+
+    /**
      * Streams a case-report photo. Photos are stored privately (not on a
      * publicly-served disk), so the admin panel proxies this through its
      * own server-side route rather than linking to it directly.

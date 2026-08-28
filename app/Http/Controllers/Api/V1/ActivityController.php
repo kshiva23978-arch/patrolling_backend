@@ -281,6 +281,7 @@ class ActivityController extends Controller
                     'message' => 'Photo added successfully.',
                     'data' => [
                         'id' => $existing->acm_id,
+                        'url' => route('app.activity-media', $existing->acm_id),
                         'caption' => $existing->acm_caption,
                         'file_size' => $existing->acm_file_size,
                     ],
@@ -324,6 +325,7 @@ class ActivityController extends Controller
             'message' => 'Photo added successfully.',
             'data' => [
                 'id' => $media->acm_id,
+                'url' => route('app.activity-media', $media->acm_id),
                 'caption' => $media->acm_caption,
                 'file_size' => $media->acm_file_size,
             ],

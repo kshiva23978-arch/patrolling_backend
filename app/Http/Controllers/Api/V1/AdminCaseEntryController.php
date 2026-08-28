@@ -108,6 +108,42 @@ class AdminCaseEntryController extends Controller
         ]);
     }
 
+    /**
+     * Deletes a case outright — its incidents, filings, route points,
+     * vehicles, and notes all cascade at the DB level (see the
+     * `case_entries`-referencing FKs' `cascadeOnDelete()`), but their photo
+     * files on disk don't, so those are removed explicitly first to avoid
+     * leaving them orphaned. Mirrors {@see AdminPatrolEntryController::destroy}.
+     */
+    public function destroy(Request $request, CaseEntry $case)
+    {
+        $this->assertRangeAccessible($request, $case->ce_range_id);
+
+        $case->load(['incidents.media', 'filings.media', 'closingMedia']);
+
+        foreach ($case->incidents as $incident) {
+            foreach ($incident->media as $media) {
+                Storage::disk($media->ceim_disk)->delete($media->ceim_file_path);
+            }
+        }
+        foreach ($case->filings as $filing) {
+            foreach ($filing->media as $media) {
+                Storage::disk($media->cefm_disk)->delete($media->cefm_file_path);
+            }
+        }
+        foreach ($case->closingMedia as $media) {
+            Storage::disk($media->cecm_disk)->delete($media->cecm_file_path);
+        }
+
+        $case->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Case deleted successfully.',
+            'data' => null,
+        ]);
+    }
+
     /** Streams an incident photo — see {@see AdminPatrolEntryController::caseMedia} for the same pattern. */
     public function incidentMedia(Request $request, CaseEntryIncidentMedia $media)
     {
