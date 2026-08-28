@@ -55,9 +55,9 @@ class AdminPatrolEntryResource extends JsonResource
                 // strings (no cast defined on `PatrolEntryVehicles`) — cast
                 // to float here so the admin panel can call `.toFixed()`
                 // on these directly instead of every caller re-coercing.
-                'start_odometer' => $v->pev_start_odometer !== null ? (float) $v->pev_start_odometer : null,
-                'end_odometer' => $v->pev_end_odometer !== null ? (float) $v->pev_end_odometer : null,
-                'distance' => $v->pev_distance !== null ? (float) $v->pev_distance : null,
+                'start_odometer' => $this->toFloat($v->pev_start_odometer),
+                'end_odometer' => $this->toFloat($v->pev_end_odometer),
+                'distance' => $this->toFloat($v->pev_distance),
             ])),
             'area_covered' => $this->pe_area_covered,
             'area_patrolled' => $this->pe_area_patrolled,
@@ -68,16 +68,16 @@ class AdminPatrolEntryResource extends JsonResource
             'current_travel_mode' => $this->pe_current_travel_mode,
             'current_vehicle_id' => $this->pe_current_vehicle_id,
             'start_location' => [
-                'latitude' => $this->pe_start_latitude,
-                'longitude' => $this->pe_start_longitude,
+                'latitude' => $this->toFloat($this->pe_start_latitude),
+                'longitude' => $this->toFloat($this->pe_start_longitude),
                 'address' => $this->pe_start_address,
             ],
             'end_location' => [
-                'latitude' => $this->pe_end_latitude,
-                'longitude' => $this->pe_end_longitude,
+                'latitude' => $this->toFloat($this->pe_end_latitude),
+                'longitude' => $this->toFloat($this->pe_end_longitude),
                 'address' => $this->pe_end_address,
             ],
-            'total_distance' => $this->pe_total_distance !== null ? (float) $this->pe_total_distance : null,
+            'total_distance' => $this->toFloat($this->pe_total_distance),
             'incident_occurred' => $this->pe_incident_occurred,
             'case_registered' => $this->pe_case_registered,
             'case_reports' => $this->whenLoaded('caseReports', fn () => $this->caseReports->map(fn ($c) => [
@@ -91,8 +91,8 @@ class AdminPatrolEntryResource extends JsonResource
                 'rehab_details' => $c->pcr_rehab_details,
                 'response_time' => $c->pcr_response_time,
                 'location' => [
-                    'latitude' => $c->pcr_latitude,
-                    'longitude' => $c->pcr_longitude,
+                    'latitude' => $this->toFloat($c->pcr_latitude),
+                    'longitude' => $this->toFloat($c->pcr_longitude),
                     'address' => $c->pcr_address,
                 ],
                 'photos' => $c->relationLoaded('media')
@@ -106,8 +106,8 @@ class AdminPatrolEntryResource extends JsonResource
                 'details' => $i->pi_details,
                 'status' => $i->pi_status,
                 'location' => [
-                    'latitude' => $i->pi_latitude,
-                    'longitude' => $i->pi_longitude,
+                    'latitude' => $this->toFloat($i->pi_latitude),
+                    'longitude' => $this->toFloat($i->pi_longitude),
                     'address' => $i->pi_address,
                 ],
                 'photos' => $i->relationLoaded('media')
@@ -125,5 +125,17 @@ class AdminPatrolEntryResource extends JsonResource
             'ended_at' => $this->pe_ended_at?->toISOString(),
             'created_at' => $this->pe_created_at?->toISOString(),
         ];
+    }
+
+    /**
+     * Postgres `decimal` columns come back from Eloquent as strings (no
+     * cast is defined on the underlying models) — every lat/lng/odometer
+     * field here goes through this so the admin panel can do
+     * arithmetic/`.toFixed()` on it directly instead of every caller
+     * re-coercing.
+     */
+    private function toFloat(mixed $value): ?float
+    {
+        return $value !== null ? (float) $value : null;
     }
 }

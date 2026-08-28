@@ -38,28 +38,24 @@ class CaseEntryResource extends JsonResource
                 'type' => $v->cev_vehicle_type,
                 'registration_no' => $v->vehicle?->vh_registration_number,
                 'is_current' => $this->ce_current_vehicle_id !== null && $v->cev_id === $this->ce_current_vehicle_id,
-                // Postgres `decimal` columns come back from Eloquent as
-                // strings (no cast is defined on `CaseEntryVehicle`) — cast
-                // to float here so the admin panel can call `.toFixed()`
-                // on these directly instead of every caller re-coercing.
-                'start_odometer' => $v->cev_start_odometer !== null ? (float) $v->cev_start_odometer : null,
-                'end_odometer' => $v->cev_end_odometer !== null ? (float) $v->cev_end_odometer : null,
-                'distance' => $v->cev_distance !== null ? (float) $v->cev_distance : null,
+                'start_odometer' => $this->toFloat($v->cev_start_odometer),
+                'end_odometer' => $this->toFloat($v->cev_end_odometer),
+                'distance' => $this->toFloat($v->cev_distance),
             ])),
             'staff_names' => $this->ce_staff_names ?? [],
             'incharge_staff' => $this->ce_incharge_staff,
             'staff_deployed_count' => $this->ce_staff_deployed_count,
             'start_location' => [
-                'latitude' => $this->ce_start_latitude,
-                'longitude' => $this->ce_start_longitude,
+                'latitude' => $this->toFloat($this->ce_start_latitude),
+                'longitude' => $this->toFloat($this->ce_start_longitude),
                 'address' => $this->ce_start_address,
             ],
             'end_location' => [
-                'latitude' => $this->ce_end_latitude,
-                'longitude' => $this->ce_end_longitude,
+                'latitude' => $this->toFloat($this->ce_end_latitude),
+                'longitude' => $this->toFloat($this->ce_end_longitude),
                 'address' => $this->ce_end_address,
             ],
-            'total_distance' => $this->ce_total_distance !== null ? (float) $this->ce_total_distance : null,
+            'total_distance' => $this->toFloat($this->ce_total_distance),
             'incident_occurred' => $this->ce_incident_occurred,
             'case_filed' => $this->ce_case_filed,
             'report' => $this->ce_report,
@@ -69,8 +65,8 @@ class CaseEntryResource extends JsonResource
                 'details' => $i->cei_details,
                 'status' => $i->cei_status,
                 'location' => [
-                    'latitude' => $i->cei_latitude,
-                    'longitude' => $i->cei_longitude,
+                    'latitude' => $this->toFloat($i->cei_latitude),
+                    'longitude' => $this->toFloat($i->cei_longitude),
                     'address' => $i->cei_address,
                 ],
                 'photos' => $i->relationLoaded('media') ? $i->media->map(fn ($m) => ['id' => $m->ceim_id]) : [],
@@ -88,8 +84,8 @@ class CaseEntryResource extends JsonResource
                 'rehab_details' => $f->cef_rehab_details,
                 'response_time' => $f->cef_response_time,
                 'location' => [
-                    'latitude' => $f->cef_latitude,
-                    'longitude' => $f->cef_longitude,
+                    'latitude' => $this->toFloat($f->cef_latitude),
+                    'longitude' => $this->toFloat($f->cef_longitude),
                     'address' => $f->cef_address,
                 ],
                 'photos' => $f->relationLoaded('media') ? $f->media->map(fn ($m) => ['id' => $m->cefm_id]) : [],
@@ -110,5 +106,16 @@ class CaseEntryResource extends JsonResource
             'created_at' => $this->ce_created_at?->toISOString(),
             'updated_at' => $this->ce_updated_at?->toISOString(),
         ];
+    }
+
+    /**
+     * Postgres `decimal` columns come back from Eloquent as strings (no
+     * cast is defined on the underlying models) — every lat/lng here goes
+     * through this so the admin panel can do arithmetic/`.toFixed()` on it
+     * directly instead of every caller re-coercing.
+     */
+    private function toFloat(mixed $value): ?float
+    {
+        return $value !== null ? (float) $value : null;
     }
 }

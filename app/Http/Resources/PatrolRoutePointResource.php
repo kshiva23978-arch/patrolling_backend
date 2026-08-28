@@ -14,8 +14,11 @@ class PatrolRoutePointResource extends JsonResource
     {
         return [
             'id' => $this->prp_id,
-            'latitude' => $this->prp_latitude,
-            'longitude' => $this->prp_longitude,
+            // Postgres `decimal` columns come back from Eloquent as strings
+            // (no cast defined on `PatrolRoutePoints`) — cast to float so
+            // the admin panel's map/distance math gets real numbers.
+            'latitude' => (float) $this->prp_latitude,
+            'longitude' => (float) $this->prp_longitude,
             'travel_mode' => $this->prp_travel_mode,
             // Not `whenLoaded` — the controller always eager-loads `vehicle`,
             // and a missing key (rather than null) here would break the
