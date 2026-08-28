@@ -82,6 +82,12 @@ class AuthController extends Controller
 
         if ($account instanceof User) {
             $data['name'] = $account->details?->ud_fullname;
+            // `null` means unrestricted (every feature on) — see
+            // `User::getPermissionsAttribute`/`Roles::hasAppFeature`. Sent
+            // here (not just via `GET /user`) so the app can gate its own
+            // UI (which nav tabs/quick actions to show) from the moment it
+            // signs in, without a second round trip.
+            $data['permissions'] = $account->permissions;
         }
 
         return response()->json([

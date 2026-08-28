@@ -138,6 +138,18 @@ class Admin extends Authenticatable
     }
 
     /**
+     * Appended to this model's JSON (see `$appends`) so the Next.js admin
+     * panel can hide the Roles/Designations nav items and pages for anyone
+     * below Master Admin — those are gated server-side regardless (see
+     * `EnsureMasterAdmin`), this is purely so the UI doesn't show an entry
+     * point that would just 403.
+     */
+    public function getIsMasterAdminAttribute(): bool
+    {
+        return $this->isMasterAdmin();
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -149,5 +161,5 @@ class Admin extends Authenticatable
         ];
     }
 
-    protected $appends = ['permissions'];
+    protected $appends = ['permissions', 'is_master_admin'];
 }

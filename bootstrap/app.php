@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'app.user' => \App\Http\Middleware\EnsureAppUser::class,
             'admin.permission' => \App\Http\Middleware\EnsureAdminPermission::class,
+            'admin.master' => \App\Http\Middleware\EnsureMasterAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

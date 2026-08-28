@@ -50,10 +50,23 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:admins');
     Route::apiResource('users', UserController::class)->only(['index', 'show', 'update','store'])
         ->middleware('admin.permission:users');
-    Route::apiResource('designations', DesignationsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+    // `index`/`show` stay open to anyone with the ordinary `designations`/
+    // `roles` view permission — Staff/User/Admin forms across the panel
+    // depend on those to populate their Designation/Role dropdowns
+    // regardless of who's filling the form out. *Managing* them
+    // (create/edit/delete) is a different, more sensitive capability —
+    // gated to Master Admin regardless of what a role's `ro_permissions`
+    // grants, so a Department Admin/Ranger role can never edit
+    // roles/designations even if someone ticks that permission box by
+    // mistake. See `EnsureMasterAdmin`'s doc comment.
+    Route::apiResource('designations', DesignationsController::class)->only(['index', 'show'])
         ->middleware('admin.permission:designations');
-    Route::apiResource('roles', RolesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+    Route::apiResource('designations', DesignationsController::class)->only(['store', 'update', 'destroy'])
+        ->middleware(['admin.permission:designations', 'admin.master']);
+    Route::apiResource('roles', RolesController::class)->only(['index', 'show'])
         ->middleware('admin.permission:roles');
+    Route::apiResource('roles', RolesController::class)->only(['store', 'update', 'destroy'])
+        ->middleware(['admin.permission:roles', 'admin.master']);
     Route::apiResource('user-details', UserDetailsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:user_details');
     Route::apiResource('ranges', RangeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
