@@ -82,6 +82,29 @@ class User extends Authenticatable
     }
 
     /**
+     * `true` if this ranger is allowed to use the app-side [$feature]
+     * ('patrolling', 'case', or 'activity') — see `Roles::hasAppFeature`. A
+     * ranger with no role assigned is unrestricted, same as a role with no
+     * `ro_permissions` configured.
+     */
+    public function hasAppFeature(string $feature): bool
+    {
+        return $this->role?->hasAppFeature($feature) ?? true;
+    }
+
+    /**
+     * The `app` half of this ranger's role's permissions, or `null` if
+     * unrestricted — appended to this model's JSON (see `$appends`) so the
+     * Flutter app can read what to show/hide without a second request.
+     */
+    public function getPermissionsAttribute(): ?array
+    {
+        $rolePermissions = $this->role?->ro_permissions;
+
+        return $rolePermissions['app'] ?? null;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -92,4 +115,6 @@ class User extends Authenticatable
             'u_password_hash' => 'hashed',
         ];
     }
+
+    protected $appends = ['permissions'];
 }

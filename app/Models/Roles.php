@@ -10,7 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['ro_id', 'ro_name', 'ro_description', 'ro_status', 'ro_created_at', 'ro_updated_at'])]
+#[Fillable(['ro_id', 'ro_name', 'ro_description', 'ro_status', 'ro_permissions', 'ro_created_at', 'ro_updated_at'])]
 #[Hidden(['ro_created_at', 'ro_updated_at'])]
 class Roles extends Model
 {
@@ -27,10 +27,57 @@ class Roles extends Model
 
     public const UPDATED_AT = 'ro_updated_at';
 
+    /** Every admin-panel section a role's permissions can name. */
+    public const ADMIN_SECTIONS = [
+        'dashboard', 'roles', 'designations', 'patrolling_modes', 'patrol_types',
+        'custom_fields', 'patrollings', 'activities', 'ranges', 'beats',
+        'vehicles', 'admins', 'users', 'user_details',
+    ];
+
+    /** Every app-side feature a role's permissions can name. */
+    public const APP_FEATURES = ['patrolling', 'case', 'activity'];
+
+    protected function casts(): array
+    {
+        return ['ro_permissions' => 'array'];
+    }
+
     protected static function booted(): void
     {
         static::creating(function (self $role): void {
             $role->ro_id ??= (string) Str::uuid();
         });
+    }
+
+    /**
+     * `true` if this role's permissions allow [$level] ('view' or 'manage')
+     * on the admin-panel section [$section]. `ro_permissions` (or its
+     * `admin` half) being unset means unrestricted — see the migration that
+     * added this column for why that's the default rather than locking
+     * every existing role out until configured.
+     */
+    public function hasAdminPermission(string $section, string $level = 'view'): bool
+    {
+        $admin = $this->ro_permissions['admin'] ?? null;
+        if ($admin === null) {
+            return true;
+        }
+
+        return (bool) ($admin[$section][$level] ?? false);
+    }
+
+    /**
+     * `true` if this role's permissions allow the app-side [$feature]
+     * ('patrolling', 'case', or 'activity'). Same unrestricted-by-default
+     * rule as [hasAdminPermission].
+     */
+    public function hasAppFeature(string $feature): bool
+    {
+        $app = $this->ro_permissions['app'] ?? null;
+        if ($app === null) {
+            return true;
+        }
+
+        return (bool) ($app[$feature] ?? false);
     }
 }

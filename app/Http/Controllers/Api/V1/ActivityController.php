@@ -67,6 +67,10 @@ class ActivityController extends Controller
     {
         $user = $request->user();
 
+        if (! $user->hasAppFeature('activity')) {
+            abort(403, "You don't have permission to create activities.");
+        }
+
         $validated = $request->validate([
             // Optional client-generated id: the app can create an activity
             // while offline and start using it locally (participants,

@@ -42,36 +42,56 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->prefix('v1')->group(functio
 */
 Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('admin.logout');
-    Route::apiResource('admins', AdminController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('users', UserController::class)->only(['index', 'show', 'update','store']);
-    Route::apiResource('designations', DesignationsController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('roles', RolesController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('user-details', UserDetailsController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('ranges', RangeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('patrolling-modes', PatrollingModeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('patrol-types', PatrolTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('beats', BeatController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::get('/user-range-access', [UserRangeAccessController::class, 'index']);
-    Route::post('/user-range-access', [UserRangeAccessController::class, 'store']);
-    Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
+    Route::apiResource('admins', AdminController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:admins');
+    Route::apiResource('users', UserController::class)->only(['index', 'show', 'update','store'])
+        ->middleware('admin.permission:users');
+    Route::apiResource('designations', DesignationsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:designations');
+    Route::apiResource('roles', RolesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:roles');
+    Route::apiResource('user-details', UserDetailsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:user_details');
+    Route::apiResource('ranges', RangeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:ranges');
+    Route::apiResource('patrolling-modes', PatrollingModeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:patrolling_modes');
+    Route::apiResource('patrol-types', PatrolTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:patrol_types');
+    Route::apiResource('beats', BeatController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:beats');
+    Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:vehicles');
 
-    Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
-    Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
-    Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
-    Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
-    Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
+    Route::middleware('admin.permission:users')->group(function () {
+        Route::get('/user-range-access', [UserRangeAccessController::class, 'index']);
+        Route::post('/user-range-access', [UserRangeAccessController::class, 'store']);
+        Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
+    });
 
-    Route::get('/activities', [AdminActivityController::class, 'index']);
-    Route::get('/activities/{activity}', [AdminActivityController::class, 'show']);
-    Route::get('/activity-media/{media}', [AdminActivityController::class, 'media']);
+    Route::middleware('admin.permission:patrollings')->group(function () {
+        Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
+        Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
+        Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
+        Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
+        Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
+    });
 
-    Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
+    Route::middleware('admin.permission:activities')->group(function () {
+        Route::get('/activities', [AdminActivityController::class, 'index']);
+        Route::get('/activities/{activity}', [AdminActivityController::class, 'show']);
+        Route::get('/activity-media/{media}', [AdminActivityController::class, 'media']);
+    });
 
-    Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
-    Route::post('/custom-fields', [RangeCustomFieldController::class, 'store']);
-    Route::put('/custom-fields/{customField}', [RangeCustomFieldController::class, 'update']);
-    Route::delete('/custom-fields/{customField}', [RangeCustomFieldController::class, 'destroy']);
+    Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats'])
+        ->middleware('admin.permission:dashboard');
+
+    Route::middleware('admin.permission:custom_fields')->group(function () {
+        Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
+        Route::post('/custom-fields', [RangeCustomFieldController::class, 'store']);
+        Route::put('/custom-fields/{customField}', [RangeCustomFieldController::class, 'update']);
+        Route::delete('/custom-fields/{customField}', [RangeCustomFieldController::class, 'destroy']);
+    });
 });
 
 /*

@@ -187,6 +187,10 @@ class PatrolEntryController extends Controller
     {
         $user = $request->user();
 
+        if (! $user->hasAppFeature('patrolling')) {
+            abort(403, "You don't have permission to create patrols.");
+        }
+
         $validated = $request->validate([
             // Optional client-generated id: the app can create a patrol while
             // offline and start using it locally (for GPS pings, incidents,
@@ -753,6 +757,10 @@ class PatrolEntryController extends Controller
     {
         $this->authorizeOwner($request, $entry);
         $this->assertInProgress($entry);
+
+        if (! $request->user()->hasAppFeature('case')) {
+            abort(403, "You don't have permission to file case reports.");
+        }
 
         $validated = $request->validate([
             'details' => ['required', 'string', 'max:5000'],

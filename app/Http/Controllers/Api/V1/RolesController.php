@@ -52,12 +52,14 @@ class RolesController extends Controller
             'ro_name' => ['required', 'string', 'max:255', Rule::unique('roles', 'ro_name')],
             'ro_description' => ['nullable', 'string'],
             'ro_status' => ['sometimes', 'boolean'],
+            ...$this->permissionsRules(),
         ]);
 
         $role = Roles::create([
             'ro_name' => trim($validated['ro_name']),
             'ro_description' => $validated['ro_description'] ?? null,
             'ro_status' => $validated['ro_status'] ?? true,
+            'ro_permissions' => $validated['ro_permissions'] ?? null,
         ]);
 
         return response()->json([
@@ -73,6 +75,7 @@ class RolesController extends Controller
             'ro_name' => ['sometimes', 'string', 'max:255', Rule::unique('roles', 'ro_name')->ignore($role->ro_id, 'ro_id')],
             'ro_description' => ['sometimes', 'string'],
             'ro_status' => ['sometimes', 'boolean'],
+            ...$this->permissionsRules(),
         ]);
 
         if (isset($validated['ro_name'])) {
@@ -87,6 +90,10 @@ class RolesController extends Controller
             $role->ro_status = $validated['ro_status'];
         }
 
+        if (array_key_exists('ro_permissions', $validated)) {
+            $role->ro_permissions = $validated['ro_permissions'];
+        }
+
         $role->save();
 
         return response()->json([
@@ -99,5 +106,24 @@ class RolesController extends Controller
     public function destroy(Roles $role)
     {
         return $this->deleteOrConflict($role, 'role');
+    }
+
+    /**
+     * Validates the shape of `ro_permissions` (see `Roles::hasAdminPermission`/
+     * `hasAppFeature` for how it's read): `null` means unrestricted, so it's
+     * only shape-checked when actually present — an admin explicitly
+     * clearing a role's restrictions by sending `null` is valid too.
+     */
+    private function permissionsRules(): array
+    {
+        return [
+            'ro_permissions' => ['nullable', 'array'],
+            'ro_permissions.admin' => ['nullable', 'array'],
+            'ro_permissions.admin.*' => ['array'],
+            'ro_permissions.admin.*.view' => ['sometimes', 'boolean'],
+            'ro_permissions.admin.*.manage' => ['sometimes', 'boolean'],
+            'ro_permissions.app' => ['nullable', 'array'],
+            'ro_permissions.app.*' => ['boolean'],
+        ];
     }
 }

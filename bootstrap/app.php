@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'app.user' => \App\Http\Middleware\EnsureAppUser::class,
+            'admin.permission' => \App\Http\Middleware\EnsureAdminPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

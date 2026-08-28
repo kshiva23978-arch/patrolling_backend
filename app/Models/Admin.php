@@ -62,6 +62,30 @@ class Admin extends Authenticatable
     }
 
     /**
+     * `true` if this admin is allowed [$level] ('view' or 'manage') access
+     * to the admin-panel section [$section] — see `Roles::hasAdminPermission`.
+     * An admin with no role assigned is unrestricted, same as a role with no
+     * `ro_permissions` configured.
+     */
+    public function hasAdminPermission(string $section, string $level = 'view'): bool
+    {
+        return $this->role?->hasAdminPermission($section, $level) ?? true;
+    }
+
+    /**
+     * The `admin` half of this admin's role's permissions, or `null` if
+     * unrestricted (no role, or a role with no `ro_permissions` configured)
+     * — appended to this model's JSON (see `$appends`) so the Next.js admin
+     * panel's session can read what to show/hide without a second request.
+     */
+    public function getPermissionsAttribute(): ?array
+    {
+        $rolePermissions = $this->role?->ro_permissions;
+
+        return $rolePermissions['admin'] ?? null;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -72,4 +96,6 @@ class Admin extends Authenticatable
             'a_password_hash' => 'hashed',
         ];
     }
+
+    protected $appends = ['permissions'];
 }
