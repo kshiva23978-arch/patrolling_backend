@@ -50,12 +50,15 @@ class AdminController extends Controller
 
     public function store(Request $request)
     {
-        // `a_password_hash` arrives as the SHA-256 hex digest of the admin's
-        // chosen password (see the frontend's equivalent of the app's
-        // `hashPassword` helper) — never the plaintext, so there's nothing
-        // here to check complexity (mixed case/symbols/etc.) against
-        // server-side; that has to be enforced client-side, before hashing.
-        // `min:8` is just a sanity floor against an empty/garbage value.
+        // Unlike `UserController` (app-side rangers, whose login always
+        // sends `password_hash: sha256(password)` — see the Flutter app's
+        // `hashPassword` helper), the admin panel's login form posts the
+        // raw `password` field (see `AuthController::attemptLogin`'s
+        // `password`/`password_hash` fallback). So `a_password_hash` here
+        // must arrive as the plaintext password too — bcrypting a
+        // pre-hashed value here would make a freshly-created/updated admin
+        // unable to log in. Complexity (mixed case/symbols/etc.) is
+        // enforced client-side; `min:8` is just a sanity floor here.
         $validated = $request->validate([
             'a_employee_id' => ['required', 'string', 'max:255', Rule::unique('admins', 'a_employee_id')],
             'a_password_hash' => ['required', 'string', 'min:8'],
