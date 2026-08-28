@@ -95,6 +95,10 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::middleware('admin.permission:cases')->group(function () {
         Route::get('/case-entries', [AdminCaseEntryController::class, 'index']);
         Route::get('/case-entries/{case}', [AdminCaseEntryController::class, 'show']);
+        Route::get('/case-entries/{case}/route-points', [AdminCaseEntryController::class, 'routePoints']);
+        Route::get('/case-incident-media/{media}', [AdminCaseEntryController::class, 'incidentMedia']);
+        Route::get('/case-filing-media/{media}', [AdminCaseEntryController::class, 'filingMedia']);
+        Route::get('/case-closing-media/{media}', [AdminCaseEntryController::class, 'closingMedia']);
     });
 
     Route::middleware('admin.permission:activities')->group(function () {

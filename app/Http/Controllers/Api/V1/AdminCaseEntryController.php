@@ -5,8 +5,13 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminCaseEntryResource;
+use App\Http\Resources\CaseEntryRoutePointResource;
 use App\Models\CaseEntry;
+use App\Models\CaseEntryClosingMedia;
+use App\Models\CaseEntryFilingMedia;
+use App\Models\CaseEntryIncidentMedia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -71,5 +76,59 @@ class AdminCaseEntryController extends Controller
             'message' => 'Case retrieved successfully.',
             'data' => new AdminCaseEntryResource($case),
         ]);
+    }
+
+    /**
+     * The case's GPS trail, oldest first. Pass `since` (an ISO timestamp,
+     * typically the last point already held client-side) to fetch only
+     * newer points — what the admin panel's live-tracking map polls, same
+     * pattern as {@see AdminPatrolEntryController::routePoints}.
+     */
+    public function routePoints(Request $request, CaseEntry $case)
+    {
+        $this->assertRangeAccessible($request, $case->ce_range_id);
+
+        $validated = $request->validate([
+            'since' => ['sometimes', 'date'],
+        ]);
+
+        $points = $case->routePoints()
+            ->with('vehicle')
+            ->when(
+                $validated['since'] ?? null,
+                fn ($query, $since) => $query->where('cerp_recorded_at', '>', $since)
+            )
+            ->orderBy('cerp_recorded_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Route points retrieved successfully.',
+            'data' => CaseEntryRoutePointResource::collection($points),
+        ]);
+    }
+
+    /** Streams an incident photo — see {@see AdminPatrolEntryController::caseMedia} for the same pattern. */
+    public function incidentMedia(Request $request, CaseEntryIncidentMedia $media)
+    {
+        $this->assertRangeAccessible($request, $media->incident->case->ce_range_id);
+
+        return Storage::disk($media->ceim_disk)->response($media->ceim_file_path);
+    }
+
+    /** Streams a case-filing photo. */
+    public function filingMedia(Request $request, CaseEntryFilingMedia $media)
+    {
+        $this->assertRangeAccessible($request, $media->filing->case->ce_range_id);
+
+        return Storage::disk($media->cefm_disk)->response($media->cefm_file_path);
+    }
+
+    /** Streams a close-case photo. */
+    public function closingMedia(Request $request, CaseEntryClosingMedia $media)
+    {
+        $this->assertRangeAccessible($request, $media->case->ce_range_id);
+
+        return Storage::disk($media->cecm_disk)->response($media->cecm_file_path);
     }
 }
