@@ -43,7 +43,7 @@ class CaseEntry extends Model
     public const TRAVEL_MODE_VEHICLE = 'vehicle';
 
     /** Minimum photos required on Add Incident / File Case / Close Case. */
-    public const MIN_PHOTOS = 5;
+    public const MIN_PHOTOS = 3;
 
     protected $table = 'case_entries';
 
