@@ -89,6 +89,18 @@ class Ranges extends Model
         );
     }
 
+    public function admins(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Admin::class,
+            'admin_range_access',
+            'ara_range_id',
+            'ara_admin_id',
+            'rn_id',
+            'a_id'
+        );
+    }
+
     public function beats(): HasMany
     {
         return $this->hasMany(Beats::class, 'bt_range_id', 'rn_id');

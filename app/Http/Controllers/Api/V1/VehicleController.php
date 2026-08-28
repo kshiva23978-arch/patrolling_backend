@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VehicleResource;
 use App\Models\Vehicles;
@@ -10,16 +11,23 @@ use Illuminate\Validation\Rule;
 
 class VehicleController extends Controller
 {
+    use ScopesToRanges;
+
     public function index(Request $request)
     {
         $validated = $request->validate([
             'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
         ]);
 
-        $vehicles = Vehicles::query()
-            ->when(isset($validated['range_id']), fn ($q) => $q->where('vh_range_id', $validated['range_id']))
-            ->latest('vh_created_at')
-            ->paginate(15);
+        if (isset($validated['range_id'])) {
+            $this->assertRangeAccessible($request, $validated['range_id']);
+        }
+
+        $query = Vehicles::query()
+            ->when(isset($validated['range_id']), fn ($q) => $q->where('vh_range_id', $validated['range_id']));
+        $query = $this->scopeToAccessibleRanges($query, $request, 'vh_range_id');
+
+        $vehicles = $query->latest('vh_created_at')->paginate(15);
 
         return response()->json([
             'success' => true,
@@ -57,8 +65,10 @@ class VehicleController extends Controller
         ]);
     }
 
-    public function show(Vehicles $vehicle)
+    public function show(Request $request, Vehicles $vehicle)
     {
+        $this->assertRangeAccessible($request, $vehicle->vh_range_id);
+
         return response()->json([
             'success' => true,
             'message' => 'Vehicle retrieved successfully.',
@@ -74,6 +84,8 @@ class VehicleController extends Controller
             'vh_type' => ['required', Rule::in(['vehicle', 'boat'])],
             'vh_status' => ['sometimes', 'boolean'],
         ]);
+
+        $this->assertRangeAccessible($request, $validated['vh_range_id']);
 
         $vehicle = Vehicles::create([
             'vh_range_id' => $validated['vh_range_id'],
@@ -91,6 +103,8 @@ class VehicleController extends Controller
 
     public function update(Request $request, Vehicles $vehicle)
     {
+        $this->assertRangeAccessible($request, $vehicle->vh_range_id);
+
         $validated = $request->validate([
             'vh_registration_number' => ['sometimes', 'string', 'max:50', Rule::unique('vehicles', 'vh_registration_number')->ignore($vehicle->vh_id, 'vh_id')],
             'vh_type' => ['sometimes', Rule::in(['vehicle', 'boat'])],
@@ -118,8 +132,10 @@ class VehicleController extends Controller
         ]);
     }
 
-    public function destroy(Vehicles $vehicle)
+    public function destroy(Request $request, Vehicles $vehicle)
     {
+        $this->assertRangeAccessible($request, $vehicle->vh_range_id);
+
         return $this->deleteOrConflict($vehicle, 'vehicle');
     }
 }

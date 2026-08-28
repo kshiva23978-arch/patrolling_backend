@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminPatrolEntryResource;
 use App\Http\Resources\PatrolRoutePointResource;
@@ -20,6 +21,8 @@ use Illuminate\Validation\Rule;
  */
 class AdminPatrolEntryController extends Controller
 {
+    use ScopesToRanges;
+
     /**
      * All patrol entries, in-progress first, newest first — optionally
      * filtered by status and/or range. Pass `type=case` or `type=all` to
@@ -37,13 +40,17 @@ class AdminPatrolEntryController extends Controller
             'type' => ['sometimes', Rule::in(['patrolling', 'case', 'all'])],
         ]);
 
+        if (isset($validated['range_id'])) {
+            $this->assertRangeAccessible($request, $validated['range_id']);
+        }
+
         $type = $validated['type'] ?? 'patrolling';
 
         if ($type !== 'patrolling') {
-            return $this->indexUnified($validated, $type);
+            return $this->indexUnified($request, $validated, $type);
         }
 
-        $entries = PatrollingEntries::query()
+        $entriesQuery = PatrollingEntries::query()
             ->where('pe_type', PatrollingEntries::TYPE_PATROLLING)
             ->with([
                 'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
@@ -56,7 +63,10 @@ class AdminPatrolEntryController extends Controller
             ->when(
                 $validated['range_id'] ?? null,
                 fn ($query, $rangeId) => $query->where('pe_range_id', $rangeId)
-            )
+            );
+        $entriesQuery = $this->scopeToAccessibleRanges($entriesQuery, $request, 'pe_range_id');
+
+        $entries = $entriesQuery
             ->orderByRaw("CASE pe_status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END")
             ->latest('pe_created_at')
             ->paginate(15);
@@ -85,10 +95,11 @@ class AdminPatrolEntryController extends Controller
      *
      * @param  array<string, mixed>  $validated
      */
-    private function indexUnified(array $validated, string $type)
+    private function indexUnified(Request $request, array $validated, string $type)
     {
         $rangeId = $validated['range_id'] ?? null;
         $status = $validated['status'] ?? null;
+        $accessibleRangeIds = $this->accessibleRangeIds($request);
 
         $patrolRows = DB::table('pe_patrolling_entries as pe')
             ->leftJoin('ranges as r', 'r.rn_id', '=', 'pe.pe_range_id')
@@ -98,6 +109,7 @@ class AdminPatrolEntryController extends Controller
             ->where('pe.pe_type', PatrollingEntries::TYPE_PATROLLING)
             ->when($rangeId, fn ($q, $id) => $q->where('pe.pe_range_id', $id))
             ->when($status, fn ($q, $s) => $q->where('pe.pe_status', $s))
+            ->when($accessibleRangeIds !== null, fn ($q) => $q->whereIn('pe.pe_range_id', $accessibleRangeIds))
             ->selectRaw("
                 pe.pe_id as id,
                 'patrolling' as type,
@@ -119,6 +131,7 @@ class AdminPatrolEntryController extends Controller
             ->leftJoin('users as u', 'u.u_id', '=', 'pcr.pcr_reported_by')
             ->leftJoin('user_details as ud', 'ud.ud_user_id', '=', 'u.u_id')
             ->when($rangeId, fn ($q, $id) => $q->where('pe.pe_range_id', $id))
+            ->when($accessibleRangeIds !== null, fn ($q) => $q->whereIn('pe.pe_range_id', $accessibleRangeIds))
             ->selectRaw("
                 pcr.pcr_id as id,
                 'case' as type,
@@ -161,8 +174,10 @@ class AdminPatrolEntryController extends Controller
         ]);
     }
 
-    public function show(PatrollingEntries $entry)
+    public function show(Request $request, PatrollingEntries $entry)
     {
+        $this->assertRangeAccessible($request, $entry->pe_range_id);
+
         $entry->load([
             'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
             'patrolLeader.details', 'caseReports.media', 'incidents.media', 'customFieldValues.customField',
@@ -182,6 +197,8 @@ class AdminPatrolEntryController extends Controller
      */
     public function routePoints(Request $request, PatrollingEntries $entry)
     {
+        $this->assertRangeAccessible($request, $entry->pe_range_id);
+
         $validated = $request->validate([
             'since' => ['sometimes', 'date'],
         ]);
@@ -207,16 +224,20 @@ class AdminPatrolEntryController extends Controller
      * publicly-served disk), so the admin panel proxies this through its
      * own server-side route rather than linking to it directly.
      */
-    public function caseMedia(PatrolCaseMedia $media)
+    public function caseMedia(Request $request, PatrolCaseMedia $media)
     {
+        $this->assertRangeAccessible($request, $media->caseReport->entry->pe_range_id);
+
         return Storage::disk($media->pcm_disk)->response($media->pcm_file_path);
     }
 
     /**
      * Streams an incident photo — see {@see caseMedia}.
      */
-    public function incidentMedia(PatrolIncidentMedia $media)
+    public function incidentMedia(Request $request, PatrolIncidentMedia $media)
     {
+        $this->assertRangeAccessible($request, $media->incident->entry->pe_range_id);
+
         return Storage::disk($media->pim_disk)->response($media->pim_file_path);
     }
 }

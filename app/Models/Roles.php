@@ -10,10 +10,22 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['ro_id', 'ro_name', 'ro_description', 'ro_status', 'ro_permissions', 'ro_created_at', 'ro_updated_at'])]
+#[Fillable(['ro_id', 'ro_name', 'ro_description', 'ro_status', 'ro_permissions', 'ro_level', 'ro_created_at', 'ro_updated_at'])]
 #[Hidden(['ro_created_at', 'ro_updated_at'])]
 class Roles extends Model
 {
+    /** Unrestricted — same as a `null` role. */
+    public const LEVEL_MASTER_ADMIN = 'master_admin';
+
+    /** Scoped to assigned ranges (see `admin_range_access`); broad view/manage within that scope. */
+    public const LEVEL_DEPARTMENT_ADMIN = 'department_admin';
+
+    /** Scoped to assigned ranges; narrower section access than `department_admin`. */
+    public const LEVEL_RANGER = 'ranger';
+
+    /** Every level an admin-table role's `ro_level` can be. */
+    public const ADMIN_LEVELS = [self::LEVEL_MASTER_ADMIN, self::LEVEL_DEPARTMENT_ADMIN, self::LEVEL_RANGER];
+
     protected $hidden = ['ro_created_at', 'ro_updated_at'];
     use HasFactory, Notifiable, HasApiTokens;
 
@@ -30,7 +42,7 @@ class Roles extends Model
     /** Every admin-panel section a role's permissions can name. */
     public const ADMIN_SECTIONS = [
         'dashboard', 'roles', 'designations', 'patrolling_modes', 'patrol_types',
-        'custom_fields', 'patrollings', 'activities', 'ranges', 'beats',
+        'custom_fields', 'patrollings', 'cases', 'activities', 'ranges', 'beats',
         'vehicles', 'admins', 'users', 'user_details',
     ];
 

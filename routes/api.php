@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\AdminActivityController;
+use App\Http\Controllers\Api\V1\AdminCaseEntryController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
+use App\Http\Controllers\Api\V1\AdminRangeAccessController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeatController;
 use App\Http\Controllers\Api\V1\CaseEntryController;
@@ -70,12 +72,26 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
     });
 
+    // Which ranges a Department Admin/Ranger admin account is scoped to —
+    // gated the same as the `admins` resource itself (only whoever can
+    // manage admin accounts can reassign what they're scoped to).
+    Route::middleware('admin.permission:admins')->group(function () {
+        Route::get('/admin-range-access', [AdminRangeAccessController::class, 'index']);
+        Route::post('/admin-range-access', [AdminRangeAccessController::class, 'store']);
+        Route::delete('/admin-range-access/{adminId}/{rangeId}', [AdminRangeAccessController::class, 'destroy']);
+    });
+
     Route::middleware('admin.permission:patrollings')->group(function () {
         Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
         Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
         Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
         Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
         Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
+    });
+
+    Route::middleware('admin.permission:cases')->group(function () {
+        Route::get('/case-entries', [AdminCaseEntryController::class, 'index']);
+        Route::get('/case-entries/{case}', [AdminCaseEntryController::class, 'show']);
     });
 
     Route::middleware('admin.permission:activities')->group(function () {

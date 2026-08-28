@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RangeResource;
 use App\Models\Ranges;
@@ -11,12 +12,14 @@ use Illuminate\Validation\ValidationException;
 
 class RangeController extends Controller
 {
-    public function index()
+    use ScopesToRanges;
+
+    public function index(Request $request)
     {
-        $ranges = Ranges::query()
-            ->with('patrollingModes')
-            ->latest('rn_created_at')
-            ->paginate(15);
+        $query = Ranges::query()->with('patrollingModes');
+        $query = $this->scopeToAccessibleRanges($query, $request, 'rn_id');
+
+        $ranges = $query->latest('rn_created_at')->paginate(15);
 
         return response()->json([
             'success' => true,
@@ -31,8 +34,10 @@ class RangeController extends Controller
         ]);
     }
 
-    public function show(Ranges $range)
+    public function show(Request $request, Ranges $range)
     {
+        $this->assertRangeAccessible($request, $range->rn_id);
+
         $range->load('patrollingModes');
 
         return response()->json([
@@ -44,6 +49,13 @@ class RangeController extends Controller
 
     public function store(Request $request)
     {
+        // Creating a new range means creating a new department — reserved
+        // for an unrestricted (master) admin, never a department_admin/
+        // ranger scoped to their existing range(s).
+        if (! $this->isUnrestrictedAdmin($request)) {
+            abort(403, 'Only a Master Admin can create ranges.');
+        }
+
         $validated = $request->validate([
             'rn_range_id' => ['required', 'string', 'max:100', Rule::unique('ranges', 'rn_range_id')],
             'rn_range_name' => ['required', 'string', 'max:100', Rule::unique('ranges', 'rn_range_name')],
@@ -82,6 +94,8 @@ class RangeController extends Controller
 
     public function update(Request $request, Ranges $range)
     {
+        $this->assertRangeAccessible($request, $range->rn_id);
+
         $validated = $request->validate([
             'rn_range_id' => ['sometimes', 'string', 'max:100', Rule::unique('ranges', 'rn_range_id')->ignore($range->rn_id, 'rn_id')],
             'rn_range_name' => ['sometimes', 'string', 'max:100', Rule::unique('ranges', 'rn_range_name')->ignore($range->rn_id, 'rn_id')],
@@ -132,8 +146,12 @@ class RangeController extends Controller
         ]);
     }
 
-    public function destroy(Ranges $range)
+    public function destroy(Request $request, Ranges $range)
     {
+        if (! $this->isUnrestrictedAdmin($request)) {
+            abort(403, 'Only a Master Admin can delete ranges.');
+        }
+
         return $this->deleteOrConflict($range, 'range');
     }
 

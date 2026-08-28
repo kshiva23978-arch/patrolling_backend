@@ -18,6 +18,7 @@ class RolesController extends Controller
                 'ro_name',
                 'ro_description',
                 'ro_status',
+                'ro_level',
                 'ro_created_at',
                 'ro_updated_at',
             ])
@@ -52,6 +53,7 @@ class RolesController extends Controller
             'ro_name' => ['required', 'string', 'max:255', Rule::unique('roles', 'ro_name')],
             'ro_description' => ['nullable', 'string'],
             'ro_status' => ['sometimes', 'boolean'],
+            'ro_level' => ['nullable', Rule::in(Roles::ADMIN_LEVELS)],
             ...$this->permissionsRules(),
         ]);
 
@@ -60,6 +62,7 @@ class RolesController extends Controller
             'ro_description' => $validated['ro_description'] ?? null,
             'ro_status' => $validated['ro_status'] ?? true,
             'ro_permissions' => $validated['ro_permissions'] ?? null,
+            'ro_level' => $validated['ro_level'] ?? null,
         ]);
 
         return response()->json([
@@ -75,6 +78,7 @@ class RolesController extends Controller
             'ro_name' => ['sometimes', 'string', 'max:255', Rule::unique('roles', 'ro_name')->ignore($role->ro_id, 'ro_id')],
             'ro_description' => ['sometimes', 'string'],
             'ro_status' => ['sometimes', 'boolean'],
+            'ro_level' => ['sometimes', 'nullable', Rule::in(Roles::ADMIN_LEVELS)],
             ...$this->permissionsRules(),
         ]);
 
@@ -92,6 +96,10 @@ class RolesController extends Controller
 
         if (array_key_exists('ro_permissions', $validated)) {
             $role->ro_permissions = $validated['ro_permissions'];
+        }
+
+        if (array_key_exists('ro_level', $validated)) {
+            $role->ro_level = $validated['ro_level'];
         }
 
         $role->save();

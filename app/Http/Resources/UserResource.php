@@ -19,6 +19,7 @@ class UserResource extends JsonResource
             'employee_id' => $this->u_employee_id,
             'role' => $this->u_role_id,
             'designation' => $this->u_designation_id,
+            'has_login' => $this->u_has_login,
             'status' => $this->u_status,
             'created_at' => $this->u_created_at?->toISOString(),
             'updated_at' => $this->u_updated_at?->toISOString(),

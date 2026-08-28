@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RangeResource;
 use App\Http\Resources\UserResource;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class UserRangeAccessController extends Controller
 {
+    use ScopesToRanges;
+
     /**
      * List range access. Filter by user_id or range_id.
      */
@@ -33,6 +36,7 @@ class UserRangeAccessController extends Controller
         }
 
         if (isset($validated['range_id'])) {
+            $this->assertRangeAccessible($request, $validated['range_id']);
             $range = Ranges::findOrFail($validated['range_id']);
 
             return response()->json([
@@ -56,6 +60,8 @@ class UserRangeAccessController extends Controller
             'user_id' => ['required', 'string', 'uuid', 'exists:users,u_id'],
             'range_id' => ['required', 'string', 'uuid', 'exists:ranges,rn_id'],
         ]);
+
+        $this->assertRangeAccessible($request, $validated['range_id']);
 
         $user = User::findOrFail($validated['user_id']);
         $range = Ranges::findOrFail($validated['range_id']);
@@ -81,8 +87,10 @@ class UserRangeAccessController extends Controller
     /**
      * Revoke a user's access to a range.
      */
-    public function destroy(string $userId, string $rangeId)
+    public function destroy(Request $request, string $userId, string $rangeId)
     {
+        $this->assertRangeAccessible($request, $rangeId);
+
         $user = User::findOrFail($userId);
         $range = Ranges::findOrFail($rangeId);
 

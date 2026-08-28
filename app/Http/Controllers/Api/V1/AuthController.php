@@ -58,6 +58,15 @@ class AuthController extends Controller
 
         $account = $modelClass::where($employeeIdColumn, $employeeId)->first();
 
+        // A staff record a Ranger created purely for record-keeping (see
+        // `UserController`/`u_has_login`) has no login of its own, even if
+        // it somehow ended up with credentials set — reject before even
+        // checking the password so no timing signal distinguishes
+        // "wrong password" from "this account can't log in".
+        if ($account instanceof User && ! $account->u_has_login) {
+            $account = null;
+        }
+
         if (! $account || ! $this->verifyPassword($account, $password, $providedHash)) {
             throw ValidationException::withMessages([
                 'employee_id' => ['Invalid employee ID or password.'],

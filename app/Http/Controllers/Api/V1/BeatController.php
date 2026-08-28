@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BeatResource;
 use App\Models\Beats;
@@ -10,16 +11,23 @@ use Illuminate\Validation\ValidationException;
 
 class BeatController extends Controller
 {
+    use ScopesToRanges;
+
     public function index(Request $request)
     {
         $validated = $request->validate([
             'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
         ]);
 
-        $beats = Beats::query()
-            ->when(isset($validated['range_id']), fn ($q) => $q->where('bt_range_id', $validated['range_id']))
-            ->latest('bt_created_at')
-            ->paginate(15);
+        if (isset($validated['range_id'])) {
+            $this->assertRangeAccessible($request, $validated['range_id']);
+        }
+
+        $query = Beats::query()
+            ->when(isset($validated['range_id']), fn ($q) => $q->where('bt_range_id', $validated['range_id']));
+        $query = $this->scopeToAccessibleRanges($query, $request, 'bt_range_id');
+
+        $beats = $query->latest('bt_created_at')->paginate(15);
 
         return response()->json([
             'success' => true,
@@ -55,8 +63,10 @@ class BeatController extends Controller
         ]);
     }
 
-    public function show(Beats $beat)
+    public function show(Request $request, Beats $beat)
     {
+        $this->assertRangeAccessible($request, $beat->bt_range_id);
+
         return response()->json([
             'success' => true,
             'message' => 'Beat retrieved successfully.',
@@ -74,6 +84,8 @@ class BeatController extends Controller
             'bt_boundary.type' => ['required_with:bt_boundary', 'in:Polygon'],
             'bt_boundary.coordinates' => ['required_with:bt_boundary', 'array', 'min:1'],
         ]);
+
+        $this->assertRangeAccessible($request, $validated['bt_range_id']);
 
         $exists = Beats::where('bt_range_id', $validated['bt_range_id'])
             ->where('bt_name', trim($validated['bt_name']))
@@ -106,6 +118,8 @@ class BeatController extends Controller
 
     public function update(Request $request, Beats $beat)
     {
+        $this->assertRangeAccessible($request, $beat->bt_range_id);
+
         $validated = $request->validate([
             'bt_name' => ['sometimes', 'string', 'max:255'],
             'bt_status' => ['sometimes', 'boolean'],
@@ -135,8 +149,10 @@ class BeatController extends Controller
         ]);
     }
 
-    public function destroy(Beats $beat)
+    public function destroy(Request $request, Beats $beat)
     {
+        $this->assertRangeAccessible($request, $beat->bt_range_id);
+
         return $this->deleteOrConflict($beat, 'beat');
     }
 

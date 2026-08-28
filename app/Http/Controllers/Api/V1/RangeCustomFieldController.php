@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RangeCustomFieldResource;
 use App\Models\RangeCustomField;
@@ -17,6 +18,8 @@ use Illuminate\Validation\ValidationException;
  */
 class RangeCustomFieldController extends Controller
 {
+    use ScopesToRanges;
+
     /**
      * Every custom field for a range, including disabled ones — the admin
      * panel's management screen needs to show and re-enable those too.
@@ -26,6 +29,8 @@ class RangeCustomFieldController extends Controller
         $validated = $request->validate([
             'range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
         ]);
+
+        $this->assertRangeAccessible($request, $validated['range_id']);
 
         $fields = RangeCustomField::where('rcf_range_id', $validated['range_id'])
             ->orderBy('rcf_sort_order')
@@ -68,6 +73,8 @@ class RangeCustomFieldController extends Controller
             'range_id' => ['required', 'uuid', 'exists:ranges,rn_id'],
         ]);
 
+        $this->assertRangeAccessible($request, $request->input('range_id'));
+
         $range = Ranges::findOrFail($request->input('range_id'));
         $validated = $this->validatePayload($request);
 
@@ -93,6 +100,8 @@ class RangeCustomFieldController extends Controller
 
     public function update(Request $request, RangeCustomField $customField)
     {
+        $this->assertRangeAccessible($request, $customField->rcf_range_id);
+
         $validated = $this->validatePayload($request, $customField);
 
         if (isset($validated['field_name'])) {
@@ -132,8 +141,10 @@ class RangeCustomFieldController extends Controller
         ]);
     }
 
-    public function destroy(RangeCustomField $customField)
+    public function destroy(Request $request, RangeCustomField $customField)
     {
+        $this->assertRangeAccessible($request, $customField->rcf_range_id);
+
         return $this->deleteOrConflict($customField, 'custom field');
     }
 

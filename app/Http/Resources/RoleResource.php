@@ -15,6 +15,7 @@ class RoleResource extends JsonResource
             'description' => $this->ro_description,
             'status' => $this->ro_status,
             'permissions' => $this->ro_permissions,
+            'level' => $this->ro_level,
         ];
     }
 }

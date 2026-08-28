@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Models\Beats;
 use App\Models\PatrolCaseReports;
@@ -17,6 +18,8 @@ use Illuminate\Support\Carbon;
  */
 class AdminDashboardController extends Controller
 {
+    use ScopesToRanges;
+
     public function stats(Request $request)
     {
         $validated = $request->validate([
@@ -25,30 +28,40 @@ class AdminDashboardController extends Controller
             'to' => ['sometimes', 'date'],
         ]);
 
+        if (isset($validated['range_id'])) {
+            $this->assertRangeAccessible($request, $validated['range_id']);
+        }
+
         $rangeId = $validated['range_id'] ?? null;
+        $accessibleRangeIds = $this->accessibleRangeIds($request);
         $from = isset($validated['from']) ? Carbon::parse($validated['from'])->toDateString() : null;
         $to = isset($validated['to']) ? Carbon::parse($validated['to'])->toDateString() : null;
 
-        $entryIdsInRange = $rangeId
-            ? PatrollingEntries::query()->where('pe_range_id', $rangeId)->pluck('pe_id')
-            : null;
+        $entryIdsQuery = $rangeId
+            ? PatrollingEntries::query()->where('pe_range_id', $rangeId)
+            : ($accessibleRangeIds !== null ? PatrollingEntries::query()->whereIn('pe_range_id', $accessibleRangeIds) : null);
+        $entryIdsInRange = $entryIdsQuery?->pluck('pe_id');
 
         $rangesCount = Ranges::query()
             ->when($rangeId, fn ($q, $id) => $q->where('rn_id', $id))
+            ->when(! $rangeId && $accessibleRangeIds !== null, fn ($q) => $q->whereIn('rn_id', $accessibleRangeIds))
             ->count();
 
         $beatsCount = Beats::query()
             ->when($rangeId, fn ($q, $id) => $q->where('bt_range_id', $id))
+            ->when(! $rangeId && $accessibleRangeIds !== null, fn ($q) => $q->whereIn('bt_range_id', $accessibleRangeIds))
             ->count();
 
         $patrollingsCount = PatrollingEntries::query()
             ->when($rangeId, fn ($q, $id) => $q->where('pe_range_id', $id))
+            ->when(! $rangeId && $accessibleRangeIds !== null, fn ($q) => $q->whereIn('pe_range_id', $accessibleRangeIds))
             ->when($from, fn ($q, $date) => $q->where('pe_patrol_date', '>=', $date))
             ->when($to, fn ($q, $date) => $q->where('pe_patrol_date', '<=', $date))
             ->count();
 
         $livePatrollingsCount = PatrollingEntries::query()
             ->when($rangeId, fn ($q, $id) => $q->where('pe_range_id', $id))
+            ->when(! $rangeId && $accessibleRangeIds !== null, fn ($q) => $q->whereIn('pe_range_id', $accessibleRangeIds))
             ->where('pe_status', PatrollingEntries::STATUS_IN_PROGRESS)
             ->count();
 
