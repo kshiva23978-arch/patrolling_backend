@@ -26,6 +26,7 @@ use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -829,6 +830,40 @@ class CaseEntryController extends Controller
             'message' => 'Case status updated.',
             'data' => new CaseEntryFilingResource($filing->fresh()),
         ]);
+    }
+
+    /**
+     * Streams one incident photo — same ownership rule as every other
+     * action here (the ranger must be this case's leader), reached through
+     * the media row's own relation chain rather than trusting an id in the
+     * URL, exactly like the admin panel's equivalent
+     * {@see \App\Http\Controllers\Api\V1\AdminCaseEntryController::incidentMedia}.
+     */
+    public function incidentMedia(Request $request, CaseEntryIncidentMedia $media)
+    {
+        $this->authorizeOwner($request, $media->incident->case);
+
+        return Storage::disk($media->ceim_disk)->response($media->ceim_file_path);
+    }
+
+    /**
+     * Streams one filing photo — see {@see incidentMedia}.
+     */
+    public function filingMedia(Request $request, CaseEntryFilingMedia $media)
+    {
+        $this->authorizeOwner($request, $media->filing->case);
+
+        return Storage::disk($media->cefm_disk)->response($media->cefm_file_path);
+    }
+
+    /**
+     * Streams one closing photo — see {@see incidentMedia}.
+     */
+    public function closingMedia(Request $request, CaseEntryClosingMedia $media)
+    {
+        $this->authorizeOwner($request, $media->case);
+
+        return Storage::disk($media->cecm_disk)->response($media->cecm_file_path);
     }
 
     /**

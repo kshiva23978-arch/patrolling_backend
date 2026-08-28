@@ -26,6 +26,7 @@ class CaseEntryIncidentResource extends JsonResource
             'reported_at' => $this->cei_reported_at?->toISOString(),
             'photos' => $this->whenLoaded('media', fn () => $this->media->map(fn ($m) => [
                 'id' => $m->ceim_id,
+                'url' => route('app.case-incident-media', $m->ceim_id),
                 'file_size' => $m->ceim_file_size,
                 'latitude' => $m->ceim_latitude,
                 'longitude' => $m->ceim_longitude,

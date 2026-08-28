@@ -79,6 +79,10 @@ class PatrolEntryResource extends JsonResource
                 'species_rescued' => $c->pcr_species_rescued,
                 'rehab_details' => $c->pcr_rehab_details,
                 'response_time' => $c->pcr_response_time,
+                'photos' => $c->relationLoaded('media') ? $c->media->map(fn ($m) => [
+                    'id' => $m->pcm_id,
+                    'url' => route('app.patrol-case-media', $m->pcm_id),
+                ]) : [],
                 'photo_count' => $c->relationLoaded('media') ? $c->media->count() : 0,
                 'reported_at' => $c->pcr_reported_at?->toISOString(),
             ])),
@@ -87,6 +91,10 @@ class PatrolEntryResource extends JsonResource
                 'name' => $i->pi_name,
                 'details' => $i->pi_details,
                 'status' => $i->pi_status,
+                'photos' => $i->relationLoaded('media') ? $i->media->map(fn ($m) => [
+                    'id' => $m->pim_id,
+                    'url' => route('app.patrol-incident-media', $m->pim_id),
+                ]) : [],
                 'photo_count' => $i->relationLoaded('media') ? $i->media->count() : 0,
                 'reported_at' => $i->pi_reported_at?->toISOString(),
             ])),

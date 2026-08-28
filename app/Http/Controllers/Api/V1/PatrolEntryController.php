@@ -30,6 +30,7 @@ use App\Services\PatrolPhotoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -924,6 +925,30 @@ class PatrolEntryController extends Controller
             'message' => 'Case status updated.',
             'data' => new PatrolCaseReportResource($caseReport->fresh()),
         ]);
+    }
+
+    /**
+     * Streams one incident photo — same ownership rule as every other
+     * action here (the ranger must be this patrol's leader), reached
+     * through the media row's own relation chain rather than trusting a
+     * range/entry id in the URL, exactly like the admin panel's equivalent
+     * {@see \App\Http\Controllers\Api\V1\AdminPatrolEntryController::incidentMedia}.
+     */
+    public function incidentMedia(Request $request, PatrolIncidentMedia $media)
+    {
+        $this->authorizeOwner($request, $media->incident->entry);
+
+        return Storage::disk($media->pim_disk)->response($media->pim_file_path);
+    }
+
+    /**
+     * Streams one case-report photo — see {@see incidentMedia}.
+     */
+    public function caseReportMedia(Request $request, PatrolCaseMedia $media)
+    {
+        $this->authorizeOwner($request, $media->caseReport->entry);
+
+        return Storage::disk($media->pcm_disk)->response($media->pcm_file_path);
     }
 
     /**

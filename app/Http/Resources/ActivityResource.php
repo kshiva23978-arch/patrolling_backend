@@ -34,6 +34,7 @@ class ActivityResource extends JsonResource
                 'media',
                 fn () => $this->media->map(fn ($m) => [
                     'id' => $m->acm_id,
+                    'url' => route('app.activity-media', $m->acm_id),
                     'caption' => $m->acm_caption,
                     'file_size' => $m->acm_file_size,
                     'latitude' => $m->acm_latitude,

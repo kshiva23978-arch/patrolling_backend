@@ -12,6 +12,7 @@ use App\Services\PatrolPhotoService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Standalone field activities (surveys, awareness drives, plantation days,
@@ -327,6 +328,20 @@ class ActivityController extends Controller
                 'file_size' => $media->acm_file_size,
             ],
         ], 201);
+    }
+
+    /**
+     * Streams one activity photo — same ownership rule as every other
+     * action here (the ranger must have created this activity), reached
+     * through the media row's own relation rather than trusting an id in
+     * the URL, exactly like the admin panel's equivalent
+     * {@see \App\Http\Controllers\Api\V1\AdminActivityController::media}.
+     */
+    public function media(Request $request, ActivityMedia $media)
+    {
+        $this->authorizeOwner($request, $media->activity);
+
+        return Storage::disk($media->acm_disk)->response($media->acm_file_path);
     }
 
     /**

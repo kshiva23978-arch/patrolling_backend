@@ -33,6 +33,7 @@ class PatrolCaseReportResource extends JsonResource
             'reported_at' => $this->pcr_reported_at?->toISOString(),
             'photos' => $this->whenLoaded('media', fn () => $this->media->map(fn ($m) => [
                 'id' => $m->pcm_id,
+                'url' => route('app.patrol-case-media', $m->pcm_id),
                 'file_size' => $m->pcm_file_size,
                 'latitude' => $m->pcm_latitude,
                 'longitude' => $m->pcm_longitude,

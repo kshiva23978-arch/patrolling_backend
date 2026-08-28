@@ -31,6 +31,7 @@ class CaseEntryFilingResource extends JsonResource
             'reported_at' => $this->cef_reported_at?->toISOString(),
             'photos' => $this->whenLoaded('media', fn () => $this->media->map(fn ($m) => [
                 'id' => $m->cefm_id,
+                'url' => route('app.case-filing-media', $m->cefm_id),
                 'file_size' => $m->cefm_file_size,
                 'latitude' => $m->cefm_latitude,
                 'longitude' => $m->cefm_longitude,

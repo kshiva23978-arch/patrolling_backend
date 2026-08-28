@@ -150,6 +150,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/patrol-entries', [PatrolEntryController::class, 'index']);
     Route::post('/patrol-entries', [PatrolEntryController::class, 'store']);
     Route::get('/patrol-entries/field-suggestions', [PatrolEntryController::class, 'fieldSuggestions']);
+    Route::get('/patrol-entries/incident-media/{media}', [PatrolEntryController::class, 'incidentMedia'])->name('app.patrol-incident-media');
+    Route::get('/patrol-entries/case-media/{media}', [PatrolEntryController::class, 'caseReportMedia'])->name('app.patrol-case-media');
     Route::get('/patrol-entries/{entry}', [PatrolEntryController::class, 'show']);
     Route::patch('/patrol-entries/{entry}', [PatrolEntryController::class, 'update']);
     Route::delete('/patrol-entries/{entry}', [PatrolEntryController::class, 'destroy']);
@@ -165,6 +167,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
 
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
+    Route::get('/activities/media/{media}', [ActivityController::class, 'media'])->name('app.activity-media');
     Route::get('/activities/{activity}', [ActivityController::class, 'show']);
     Route::post('/activities/{activity}/end', [ActivityController::class, 'end']);
     Route::post('/activities/{activity}/participants', [ActivityController::class, 'addParticipant']);
@@ -176,6 +179,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/cases', [CaseEntryController::class, 'index']);
     Route::post('/cases', [CaseEntryController::class, 'store']);
     Route::get('/cases/field-suggestions', [CaseEntryController::class, 'fieldSuggestions']);
+    Route::get('/cases/incident-media/{media}', [CaseEntryController::class, 'incidentMedia'])->name('app.case-incident-media');
+    Route::get('/cases/filing-media/{media}', [CaseEntryController::class, 'filingMedia'])->name('app.case-filing-media');
+    Route::get('/cases/closing-media/{media}', [CaseEntryController::class, 'closingMedia'])->name('app.case-closing-media');
     Route::get('/cases/{case}', [CaseEntryController::class, 'show']);
     Route::patch('/cases/{case}', [CaseEntryController::class, 'update']);
     Route::delete('/cases/{case}', [CaseEntryController::class, 'destroy']);

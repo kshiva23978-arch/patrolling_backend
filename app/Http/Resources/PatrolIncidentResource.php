@@ -28,6 +28,7 @@ class PatrolIncidentResource extends JsonResource
             'reported_at' => $this->pi_reported_at?->toISOString(),
             'photos' => $this->whenLoaded('media', fn () => $this->media->map(fn ($m) => [
                 'id' => $m->pim_id,
+                'url' => route('app.patrol-incident-media', $m->pim_id),
                 'file_size' => $m->pim_file_size,
                 'latitude' => $m->pim_latitude,
                 'longitude' => $m->pim_longitude,
