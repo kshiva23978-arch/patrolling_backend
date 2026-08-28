@@ -38,9 +38,13 @@ class CaseEntryResource extends JsonResource
                 'type' => $v->cev_vehicle_type,
                 'registration_no' => $v->vehicle?->vh_registration_number,
                 'is_current' => $this->ce_current_vehicle_id !== null && $v->cev_id === $this->ce_current_vehicle_id,
-                'start_odometer' => $v->cev_start_odometer,
-                'end_odometer' => $v->cev_end_odometer,
-                'distance' => $v->cev_distance,
+                // Postgres `decimal` columns come back from Eloquent as
+                // strings (no cast is defined on `CaseEntryVehicle`) — cast
+                // to float here so the admin panel can call `.toFixed()`
+                // on these directly instead of every caller re-coercing.
+                'start_odometer' => $v->cev_start_odometer !== null ? (float) $v->cev_start_odometer : null,
+                'end_odometer' => $v->cev_end_odometer !== null ? (float) $v->cev_end_odometer : null,
+                'distance' => $v->cev_distance !== null ? (float) $v->cev_distance : null,
             ])),
             'staff_names' => $this->ce_staff_names ?? [],
             'incharge_staff' => $this->ce_incharge_staff,
@@ -55,7 +59,7 @@ class CaseEntryResource extends JsonResource
                 'longitude' => $this->ce_end_longitude,
                 'address' => $this->ce_end_address,
             ],
-            'total_distance' => $this->ce_total_distance,
+            'total_distance' => $this->ce_total_distance !== null ? (float) $this->ce_total_distance : null,
             'incident_occurred' => $this->ce_incident_occurred,
             'case_filed' => $this->ce_case_filed,
             'report' => $this->ce_report,

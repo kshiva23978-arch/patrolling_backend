@@ -51,9 +51,13 @@ class AdminPatrolEntryResource extends JsonResource
                 'type' => $v->pev_vehicle_type,
                 'registration_no' => $v->vehicle?->vh_registration_number,
                 'is_current' => $this->pe_current_vehicle_id !== null && $v->pev_id === $this->pe_current_vehicle_id,
-                'start_odometer' => $v->pev_start_odometer,
-                'end_odometer' => $v->pev_end_odometer,
-                'distance' => $v->pev_distance,
+                // Postgres `decimal` columns come back from Eloquent as
+                // strings (no cast defined on `PatrolEntryVehicles`) — cast
+                // to float here so the admin panel can call `.toFixed()`
+                // on these directly instead of every caller re-coercing.
+                'start_odometer' => $v->pev_start_odometer !== null ? (float) $v->pev_start_odometer : null,
+                'end_odometer' => $v->pev_end_odometer !== null ? (float) $v->pev_end_odometer : null,
+                'distance' => $v->pev_distance !== null ? (float) $v->pev_distance : null,
             ])),
             'area_covered' => $this->pe_area_covered,
             'area_patrolled' => $this->pe_area_patrolled,
@@ -73,7 +77,7 @@ class AdminPatrolEntryResource extends JsonResource
                 'longitude' => $this->pe_end_longitude,
                 'address' => $this->pe_end_address,
             ],
-            'total_distance' => $this->pe_total_distance,
+            'total_distance' => $this->pe_total_distance !== null ? (float) $this->pe_total_distance : null,
             'incident_occurred' => $this->pe_incident_occurred,
             'case_registered' => $this->pe_case_registered,
             'case_reports' => $this->whenLoaded('caseReports', fn () => $this->caseReports->map(fn ($c) => [
