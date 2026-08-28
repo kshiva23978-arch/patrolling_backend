@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeatController;
+use App\Http\Controllers\Api\V1\CaseEntryController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DesignationsController;
 use App\Http\Controllers\Api\V1\PatrolEntryController;
@@ -134,4 +135,21 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
 
     Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
+
+    Route::get('/cases', [CaseEntryController::class, 'index']);
+    Route::post('/cases', [CaseEntryController::class, 'store']);
+    Route::get('/cases/field-suggestions', [CaseEntryController::class, 'fieldSuggestions']);
+    Route::get('/cases/{case}', [CaseEntryController::class, 'show']);
+    Route::patch('/cases/{case}', [CaseEntryController::class, 'update']);
+    Route::delete('/cases/{case}', [CaseEntryController::class, 'destroy']);
+    Route::post('/cases/{case}/start', [CaseEntryController::class, 'startCase']);
+    Route::patch('/cases/{case}/current-travel-mode', [CaseEntryController::class, 'setCurrentTravelMode']);
+    Route::post('/cases/{case}/close', [CaseEntryController::class, 'closeCase']);
+    Route::post('/cases/{case}/incidents', [CaseEntryController::class, 'addIncident']);
+    Route::patch('/cases/{case}/incidents/{incident}/status', [CaseEntryController::class, 'updateIncidentStatus']);
+    Route::post('/cases/{case}/filings', [CaseEntryController::class, 'addFiling']);
+    Route::patch('/cases/{case}/filings/{filing}/status', [CaseEntryController::class, 'updateFilingStatus']);
+    Route::post('/cases/{case}/notes', [CaseEntryController::class, 'addNote']);
+    Route::get('/cases/{case}/route-points', [CaseEntryController::class, 'routePoints']);
+    Route::post('/cases/{case}/gps', [CaseEntryController::class, 'addGpsPing']);
 });

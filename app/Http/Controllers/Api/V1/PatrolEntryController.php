@@ -10,6 +10,7 @@ use App\Http\Resources\PatrolNoteResource;
 use App\Http\Resources\PatrolRoutePointResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
+use App\Models\CaseEntry;
 use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
@@ -260,7 +261,19 @@ class PatrolEntryController extends Controller
             ->whereIn('pe_status', [PatrollingEntries::STATUS_PENDING, PatrollingEntries::STATUS_IN_PROGRESS])
             ->exists();
 
-        if ($hasUnfinishedEntry) {
+        // Same rule extends across the independent Case module (see
+        // CaseEntryController::hasUnfinishedActivity, which carries the
+        // matching check on its own side) — a ranger can only be actively
+        // patrolling or working a case, never both at once.
+        $hasUnfinishedCase = ! $hasUnfinishedEntry && CaseEntry::where('ce_leader_id', $user->u_id)
+            ->when(
+                $tokenId !== null,
+                fn ($q) => $q->where('ce_created_via_token_id', $tokenId),
+            )
+            ->whereIn('ce_status', [CaseEntry::STATUS_PENDING, CaseEntry::STATUS_IN_PROGRESS])
+            ->exists();
+
+        if ($hasUnfinishedEntry || $hasUnfinishedCase) {
             abort(409, 'You already have a patrol or case that has not ended yet. End it before creating a new one.');
         }
 
