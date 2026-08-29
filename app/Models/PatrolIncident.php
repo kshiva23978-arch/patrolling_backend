@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * {@see PatrolCaseReports} case, and optionally escalated into one from the
  * app afterwards.
  */
-#[Fillable(['pi_id', 'pi_entry_id', 'pi_reported_by', 'pi_name', 'pi_details', 'pi_status', 'pi_latitude', 'pi_longitude', 'pi_address', 'pi_reported_at', 'pi_created_at', 'pi_updated_at'])]
+#[Fillable(['pi_id', 'pi_client_id', 'pi_entry_id', 'pi_reported_by', 'pi_name', 'pi_details', 'pi_status', 'pi_latitude', 'pi_longitude', 'pi_address', 'pi_reported_at', 'pi_created_at', 'pi_updated_at'])]
 class PatrolIncident extends Model
 {
     use HasFactory;

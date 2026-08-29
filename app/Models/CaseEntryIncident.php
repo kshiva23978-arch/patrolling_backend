@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['cei_id', 'cei_case_id', 'cei_reported_by', 'cei_name', 'cei_details', 'cei_status', 'cei_latitude', 'cei_longitude', 'cei_address', 'cei_reported_at', 'cei_created_at', 'cei_updated_at'])]
+#[Fillable(['cei_id', 'cei_client_id', 'cei_case_id', 'cei_reported_by', 'cei_name', 'cei_details', 'cei_status', 'cei_latitude', 'cei_longitude', 'cei_address', 'cei_reported_at', 'cei_created_at', 'cei_updated_at'])]
 class CaseEntryIncident extends Model
 {
     use HasFactory;

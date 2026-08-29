@@ -707,6 +707,17 @@ class PatrolEntryController extends Controller
         $this->assertInProgress($entry);
 
         $validated = $request->validate([
+            // Optional client-generated id: the app queues this incident
+            // locally and may replay the request after a timeout that the
+            // server actually completed (a slow/dropped response, common
+            // right after reconnecting with a backlog of offline incidents
+            // to push). Sending the same id back on that replay — instead of
+            // always creating a fresh row — makes the request idempotent, so
+            // the ranger sees the sync succeed instead of a confusing error
+            // for something that already went through, and no duplicate
+            // incident is left behind. Same pattern as `pe_id` on the entry
+            // itself; see PatrolEntryController::store().
+            'client_id' => ['sometimes', 'uuid'],
             'name' => ['required', 'string', 'max:150'],
             'details' => ['required', 'string', 'max:5000'],
             'status' => ['sometimes', Rule::in(['open', 'closed'])],
@@ -716,9 +727,26 @@ class PatrolEntryController extends Controller
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
+        if (! empty($validated['client_id'])) {
+            $existing = PatrolIncident::where('pi_entry_id', $entry->pe_id)
+                ->where('pi_client_id', $validated['client_id'])
+                ->first();
+
+            if ($existing) {
+                $existing->load('media');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Incident recorded successfully.',
+                    'data' => new PatrolIncidentResource($existing),
+                ], 201);
+            }
+        }
+
         $incident = DB::transaction(function () use ($validated, $entry, $request) {
             $incident = PatrolIncident::create([
                 'pi_entry_id' => $entry->pe_id,
+                'pi_client_id' => $validated['client_id'] ?? null,
                 'pi_reported_by' => $request->user()->u_id,
                 'pi_name' => $validated['name'],
                 'pi_details' => $validated['details'],
@@ -777,6 +805,8 @@ class PatrolEntryController extends Controller
         }
 
         $validated = $request->validate([
+            // See PatrolEntryController::addIncident()'s `client_id` for why.
+            'client_id' => ['sometimes', 'uuid'],
             'details' => ['required', 'string', 'max:5000'],
             'conflict_type' => ['nullable', 'string', 'max:100'],
             'status' => ['sometimes', Rule::in(['open', 'closed'])],
@@ -790,9 +820,26 @@ class PatrolEntryController extends Controller
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
+        if (! empty($validated['client_id'])) {
+            $existing = PatrolCaseReports::where('pcr_entry_id', $entry->pe_id)
+                ->where('pcr_client_id', $validated['client_id'])
+                ->first();
+
+            if ($existing) {
+                $existing->load('media');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Case report recorded successfully.',
+                    'data' => new PatrolCaseReportResource($existing),
+                ], 201);
+            }
+        }
+
         $caseReport = DB::transaction(function () use ($validated, $entry, $request) {
             $caseReport = PatrolCaseReports::create([
                 'pcr_entry_id' => $entry->pe_id,
+                'pcr_client_id' => $validated['client_id'] ?? null,
                 'pcr_reported_by' => $request->user()->u_id,
                 'pcr_case_number' => $this->generateCaseNumber($entry->range),
                 'pcr_details' => $validated['details'],

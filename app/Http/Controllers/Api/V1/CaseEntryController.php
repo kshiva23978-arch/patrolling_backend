@@ -629,6 +629,8 @@ class CaseEntryController extends Controller
         $this->assertInProgress($case);
 
         $validated = $request->validate([
+            // See PatrolEntryController::addIncident()'s `client_id` for why.
+            'client_id' => ['sometimes', 'uuid'],
             'name' => ['required', 'string', 'max:150'],
             'details' => ['required', 'string', 'max:5000'],
             'status' => ['sometimes', Rule::in(['open', 'closed'])],
@@ -638,9 +640,26 @@ class CaseEntryController extends Controller
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
+        if (! empty($validated['client_id'])) {
+            $existing = CaseEntryIncident::where('cei_case_id', $case->ce_id)
+                ->where('cei_client_id', $validated['client_id'])
+                ->first();
+
+            if ($existing) {
+                $existing->load('media');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Incident recorded successfully.',
+                    'data' => new CaseEntryIncidentResource($existing),
+                ], 201);
+            }
+        }
+
         $incident = DB::transaction(function () use ($validated, $case, $request) {
             $incident = CaseEntryIncident::create([
                 'cei_case_id' => $case->ce_id,
+                'cei_client_id' => $validated['client_id'] ?? null,
                 'cei_reported_by' => $request->user()->u_id,
                 'cei_name' => $validated['name'],
                 'cei_details' => $validated['details'],
@@ -700,6 +719,8 @@ class CaseEntryController extends Controller
         $this->assertInProgress($case);
 
         $validated = $request->validate([
+            // See PatrolEntryController::addIncident()'s `client_id` for why.
+            'client_id' => ['sometimes', 'uuid'],
             'details' => ['required', 'string', 'max:5000'],
             'conflict_type' => ['nullable', 'string', 'max:100'],
             'status' => ['sometimes', Rule::in(['open', 'closed'])],
@@ -713,9 +734,26 @@ class CaseEntryController extends Controller
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
+        if (! empty($validated['client_id'])) {
+            $existing = CaseEntryFiling::where('cef_case_id', $case->ce_id)
+                ->where('cef_client_id', $validated['client_id'])
+                ->first();
+
+            if ($existing) {
+                $existing->load('media');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Case filed successfully.',
+                    'data' => new CaseEntryFilingResource($existing),
+                ], 201);
+            }
+        }
+
         $filing = DB::transaction(function () use ($validated, $case, $request) {
             $filing = CaseEntryFiling::create([
                 'cef_case_id' => $case->ce_id,
+                'cef_client_id' => $validated['client_id'] ?? null,
                 'cef_reported_by' => $request->user()->u_id,
                 'cef_filing_number' => $this->generateCaseNumber($case->range),
                 'cef_details' => $validated['details'],

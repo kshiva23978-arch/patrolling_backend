@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 /** The "File Case" sub-action: a rescue/legal filing recorded against a Case. */
 #[Fillable([
-    'cef_id', 'cef_case_id', 'cef_reported_by', 'cef_filing_number', 'cef_details', 'cef_status',
+    'cef_id', 'cef_client_id', 'cef_case_id', 'cef_reported_by', 'cef_filing_number', 'cef_details', 'cef_status',
     'cef_conflict_type', 'cef_rescue_conducted', 'cef_species_rescued', 'cef_rehab_details', 'cef_response_time',
     'cef_latitude', 'cef_longitude', 'cef_address', 'cef_reported_at', 'cef_created_at', 'cef_updated_at',
 ])]
