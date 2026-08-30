@@ -101,6 +101,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
         Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
         Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
+        Route::get('/patrol-entries/{entry}/start-selfie', [AdminPatrolEntryController::class, 'startSelfie']);
         Route::post('/patrol-entries/{entry}/comments', [AdminPatrolEntryController::class, 'storeComment']);
         Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
         Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
@@ -168,6 +169,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/patrol-entries/{entry}/cases/{caseReport}/status', [PatrolEntryController::class, 'updateCaseReportStatus']);
     Route::post('/patrol-entries/{entry}/notes', [PatrolEntryController::class, 'addNote']);
     Route::get('/patrol-entries/{entry}/route-points', [PatrolEntryController::class, 'routePoints']);
+    Route::get('/patrol-entries/{entry}/start-selfie', [PatrolEntryController::class, 'startSelfie'])->name('app.patrol-start-selfie');
 
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);

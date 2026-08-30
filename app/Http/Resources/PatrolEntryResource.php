@@ -63,6 +63,9 @@ class PatrolEntryResource extends JsonResource
                 'longitude' => $this->pe_end_longitude,
                 'address' => $this->pe_end_address,
             ],
+            'start_selfie_url' => $this->pe_start_selfie_path
+                ? route('app.patrol-start-selfie', $this->pe_id)
+                : null,
             'total_distance' => $this->pe_total_distance,
             'distance' => $this->whenLoaded('routePoints', fn () => $this->distanceSummary()),
             'incident_occurred' => $this->pe_incident_occurred,

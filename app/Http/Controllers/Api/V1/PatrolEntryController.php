@@ -402,12 +402,21 @@ class PatrolEntryController extends Controller
             // stamping the moment connectivity happened to return. Omitted
             // (defaulting to now()) for a normal online start.
             'started_at' => ['sometimes', 'date', 'before_or_equal:now'],
+            // Proves the ranger themself is the one starting this patrol —
+            // captured (and watermarked with time/GPS/patrol id) by the app
+            // right before this request, so it's mandatory here too rather
+            // than only enforced client-side.
+            'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
+
+        $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'patrol-start-selfies/'.$entry->pe_id);
 
         $entry->update([
             'pe_gps_enabled' => true,
             'pe_start_latitude' => $validated['latitude'],
             'pe_start_longitude' => $validated['longitude'],
+            'pe_start_selfie_disk' => 'local',
+            'pe_start_selfie_path' => $storedSelfie['path'],
             'pe_status' => PatrollingEntries::STATUS_IN_PROGRESS,
             'pe_started_at' => $validated['started_at'] ?? now(),
         ]);
@@ -986,6 +995,20 @@ class PatrolEntryController extends Controller
         $this->authorizeOwner($request, $media->incident->entry);
 
         return Storage::disk($media->pim_disk)->response($media->pim_file_path);
+    }
+
+    /**
+     * Streams the selfie captured to start this patrol — see {@see startPatrol}.
+     */
+    public function startSelfie(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($entry->pe_start_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($entry->pe_start_selfie_disk)->response($entry->pe_start_selfie_path);
     }
 
     /**

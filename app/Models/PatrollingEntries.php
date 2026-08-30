@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
     'pe_id', 'pe_patrol_id', 'pe_type', 'pe_patrol_date', 'pe_start_time', 'pe_end_time',
     'pe_range_id', 'pe_beat_id', 'pe_area_covered', 'pe_patrol_type_id',
     'pe_start_latitude', 'pe_start_longitude', 'pe_end_latitude', 'pe_end_longitude',
-    'pe_start_address', 'pe_end_address', 'pe_total_distance',
+    'pe_start_address', 'pe_end_address', 'pe_start_selfie_disk', 'pe_start_selfie_path', 'pe_total_distance',
     'pe_staff_deployed_count', 'pe_staff_names', 'pe_incharge_staff', 'pe_patrol_leader_id',
     'pe_created_via_token_id', 'pe_area_patrolled',
     'pe_incident_occurred', 'pe_case_registered', 'pe_seizure_made', 'pe_remarks',

@@ -77,6 +77,7 @@ class AdminPatrolEntryResource extends JsonResource
                 'longitude' => $this->toFloat($this->pe_end_longitude),
                 'address' => $this->pe_end_address,
             ],
+            'has_start_selfie' => $this->pe_start_selfie_path !== null,
             'total_distance' => $this->toFloat($this->pe_total_distance),
             'incident_occurred' => $this->pe_incident_occurred,
             'case_registered' => $this->pe_case_registered,
