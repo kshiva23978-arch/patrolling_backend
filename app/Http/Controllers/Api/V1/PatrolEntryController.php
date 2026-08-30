@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PatrolCaseReportResource;
+use App\Http\Resources\PatrolEntryCommentResource;
 use App\Http\Resources\PatrolEntryResource;
 use App\Http\Resources\PatrolIncidentResource;
 use App\Http\Resources\PatrolNoteResource;
@@ -13,6 +14,7 @@ use App\Models\Beats;
 use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
+use App\Models\PatrolEntryComment;
 use App\Models\PatrolEntryVehicles;
 use App\Models\PatrolEntryCustomFieldValue;
 use App\Models\PatrolIncident;
@@ -123,13 +125,25 @@ class PatrolEntryController extends Controller
     /**
      * Entries created by the currently authenticated field user.
      */
+    /**
+     * Own entries (any status) are always visible, same as before; entries
+     * this ranger didn't lead are visible only when their range is one
+     * this ranger is currently assigned to ({@see User::ranges}) — never
+     * any other range. See {@see canViewEntry}, shared with {@see show}.
+     */
     public function index(Request $request)
     {
+        $rangeIds = $request->user()->ranges()->pluck('ranges.rn_id');
+
         $entries = PatrollingEntries::query()
-            ->where('pe_patrol_leader_id', $request->user()->u_id)
+            ->where(function ($query) use ($request, $rangeIds) {
+                $query->where('pe_patrol_leader_id', $request->user()->u_id)
+                    ->orWhereIn('pe_range_id', $rangeIds);
+            })
             ->with([
                 'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints',
-                'caseReports.media', 'incidents.media', 'notes', 'customFieldValues.customField',
+                'caseReports.media', 'incidents.media', 'notes', 'comments.admin', 'comments.user.details',
+                'customFieldValues.customField',
             ])
             ->latest('pe_created_at')
             ->paginate(15);
@@ -149,9 +163,11 @@ class PatrolEntryController extends Controller
 
     public function show(Request $request, PatrollingEntries $entry)
     {
-        $this->authorizeOwner($request, $entry);
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
-        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints', 'customFieldValues.customField', 'notes']);
+        $entry->load(['range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'caseReports.media', 'incidents.media', 'routePoints', 'customFieldValues.customField', 'notes', 'comments.admin', 'comments.user.details']);
 
         return response()->json([
             'success' => true,
@@ -499,11 +515,19 @@ class PatrolEntryController extends Controller
      * an `id` already on this entry) or adds a new one (when it doesn't);
      * `remove_vehicle_ids` deletes vehicles outright — removing whichever
      * one is currently the active travel mode clears that selection.
+     *
+     * No status guard: the app only ever exposes editing modes/vehicles/
+     * staff while a patrol is active, so the only way this is ever called
+     * against an already-completed entry is the sync queue replaying an
+     * edit that was made before the patrol ended locally but is only
+     * reaching the server now (e.g. it failed earlier in the same sync run
+     * that `end_patrol` itself went on to succeed in). Rejecting that would
+     * permanently strand the edit, since a completed patrol never goes back
+     * to `in_progress` — same reasoning as {@see assertStarted}.
      */
     public function update(Request $request, PatrollingEntries $entry)
     {
         $this->authorizeOwner($request, $entry);
-        $this->assertNotCompleted($entry);
 
         $validated = $request->validate([
             'mode_ids' => ['sometimes', 'array', 'min:1'],
@@ -691,7 +715,7 @@ class PatrolEntryController extends Controller
     public function addIncident(Request $request, PatrollingEntries $entry)
     {
         $this->authorizeOwner($request, $entry);
-        $this->assertInProgress($entry);
+        $this->assertStarted($entry);
 
         $validated = $request->validate([
             // Optional client-generated id: the app queues this incident
@@ -785,7 +809,7 @@ class PatrolEntryController extends Controller
     public function addCaseReport(Request $request, PatrollingEntries $entry)
     {
         $this->authorizeOwner($request, $entry);
-        $this->assertInProgress($entry);
+        $this->assertStarted($entry);
 
         if (! $request->user()->hasAppFeature('case')) {
             abort(403, "You don't have permission to file case reports.");
@@ -890,7 +914,7 @@ class PatrolEntryController extends Controller
     public function addNote(Request $request, PatrollingEntries $entry)
     {
         $this->authorizeOwner($request, $entry);
-        $this->assertInProgress($entry);
+        $this->assertStarted($entry);
 
         $validated = $request->validate([
             'text' => ['required', 'string', 'max:5000'],
@@ -908,6 +932,87 @@ class PatrolEntryController extends Controller
             'message' => 'Note recorded successfully.',
             'data' => new PatrolNoteResource($note),
         ], 201);
+    }
+
+    /**
+     * A ranger's own live comment on a *completed* patrol — requires the
+     * app-side `comment` permission ({@see Roles::APP_FEATURES}) and
+     * {@see canViewEntry} (own patrol, or within an assigned range) rather
+     * than {@see authorizeOwner}, since the whole point is letting a
+     * Ranger-permission account comment on Field Staff's own patrols, not
+     * just their own. Unlike every other queued app write, this posts
+     * immediately and is never offline-queued — see the Flutter app's own
+     * doc comment on why.
+     */
+    public function addComment(Request $request, PatrollingEntries $entry)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to add comments.");
+        }
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
+        if ($entry->pe_status !== PatrollingEntries::STATUS_COMPLETED) {
+            abort(409, 'Comments can only be added once the patrol has ended.');
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment = PatrolEntryComment::create([
+            'pec_entry_id' => $entry->pe_id,
+            'pec_user_id' => $user->u_id,
+            'pec_text' => $validated['text'],
+            'pec_created_at' => now(),
+        ]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment added successfully.',
+            'data' => new PatrolEntryCommentResource($comment),
+        ], 201);
+    }
+
+    /**
+     * Edits a comment — only the ranger who wrote it may edit it; an
+     * admin's comment (or another ranger's) is never editable from the
+     * app. {@see addComment}'s other guards (permission, view access,
+     * completed status) all still apply.
+     */
+    public function updateComment(Request $request, PatrollingEntries $entry, PatrolEntryComment $comment)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to edit comments.");
+        }
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
+        if ($comment->pec_entry_id !== $entry->pe_id) {
+            abort(404);
+        }
+        if ($comment->pec_user_id !== $user->u_id) {
+            abort(403, 'You can only edit your own comments.');
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment->update([
+            'pec_text' => $validated['text'],
+            'pec_updated_at' => now(),
+        ]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment updated successfully.',
+            'data' => new PatrolEntryCommentResource($comment),
+        ]);
     }
 
     /**
@@ -1175,6 +1280,25 @@ class PatrolEntryController extends Controller
         }
     }
 
+    /**
+     * Broader than {@see authorizeOwner}: also true for a ranger who isn't
+     * this entry's own leader but is currently assigned to its range (see
+     * {@see User::ranges}) — lets a Ranger-permission account review (and,
+     * via {@see addComment}, comment on) Field Staff's patrols within their
+     * own range, without ever seeing a range they aren't assigned to.
+     * {@see authorizeOwner} still gates every actual edit (start, add
+     * incident/case, end, etc.) — this only ever widens read access.
+     */
+    private function canViewEntry(Request $request, PatrollingEntries $entry): bool
+    {
+        $user = $request->user();
+        if ($entry->pe_patrol_leader_id === $user->u_id) {
+            return true;
+        }
+
+        return $user->ranges()->where('ranges.rn_id', $entry->pe_range_id)->exists();
+    }
+
     private function assertInProgress(PatrollingEntries $entry): void
     {
         if ($entry->pe_status !== PatrollingEntries::STATUS_IN_PROGRESS) {
@@ -1186,6 +1310,26 @@ class PatrolEntryController extends Controller
     {
         if ($entry->pe_status === PatrollingEntries::STATUS_COMPLETED) {
             abort(409, 'This patrol entry has already ended.');
+        }
+    }
+
+    /**
+     * Looser than {@see assertInProgress}: rejects only a patrol that
+     * hasn't started yet. Used by endpoints recording data that belongs to
+     * the patrol's active lifetime (incidents, case reports, notes) rather
+     * than the live in-progress state itself — the app queues all of this
+     * locally and only syncs it later, in creation order, with
+     * `end_patrol` pushed last (see `SyncQueueService`'s doc comment on the
+     * app side). If an earlier row in that same sync run fails but
+     * `end_patrol` still goes through, this data must still be accepted
+     * once it finally does sync, or it would be permanently stranded —
+     * `assertInProgress` would keep rejecting it with a 409 forever, since
+     * a completed patrol never goes back to `in_progress`.
+     */
+    private function assertStarted(PatrollingEntries $entry): void
+    {
+        if ($entry->pe_status === PatrollingEntries::STATUS_PENDING) {
+            abort(409, 'Start this patrol before adding data to it.');
         }
     }
 

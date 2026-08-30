@@ -137,4 +137,9 @@ class CaseEntry extends Model
     {
         return $this->hasMany(CaseEntryNote::class, 'cen_case_id', 'ce_id')->orderBy('cen_created_at');
     }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(CaseEntryComment::class, 'cec_case_id', 'ce_id')->orderBy('cec_created_at');
+    }
 }

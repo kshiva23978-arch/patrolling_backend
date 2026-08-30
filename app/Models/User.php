@@ -69,6 +69,11 @@ class User extends Authenticatable
         return $this->hasOne(UserDetails::class, 'ud_user_id', 'u_id');
     }
 
+    public function designation(): BelongsTo
+    {
+        return $this->belongsTo(Designations::class, 'u_designation_id', 'd_id');
+    }
+
     public function ranges(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -105,6 +110,16 @@ class User extends Authenticatable
     }
 
     /**
+     * This ranger's designation (job title, e.g. "Ranger"/"Field Staff") —
+     * appended to this model's JSON (see `$appends`) so the app dashboard
+     * can show it without a second request.
+     */
+    public function getDesignationNameAttribute(): ?string
+    {
+        return $this->designation?->d_designation_name;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -117,5 +132,5 @@ class User extends Authenticatable
         ];
     }
 
-    protected $appends = ['permissions'];
+    protected $appends = ['permissions', 'designation_name'];
 }

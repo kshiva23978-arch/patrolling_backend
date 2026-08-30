@@ -88,6 +88,7 @@ class AuthController extends Controller
             // UI (which nav tabs/quick actions to show) from the moment it
             // signs in, without a second round trip.
             $data['permissions'] = $account->permissions;
+            $data['designation'] = $account->designation_name;
         }
 
         return response()->json([

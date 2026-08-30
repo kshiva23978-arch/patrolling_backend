@@ -114,6 +114,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/case-entries/{case}', [AdminCaseEntryController::class, 'show']);
         Route::get('/case-entries/{case}/route-points', [AdminCaseEntryController::class, 'routePoints']);
         Route::get('/case-entries/{case}/start-selfie', [AdminCaseEntryController::class, 'startSelfie']);
+        Route::get('/case-entries/{case}/end-selfie', [AdminCaseEntryController::class, 'endSelfie']);
         Route::get('/case-incident-media/{media}', [AdminCaseEntryController::class, 'incidentMedia']);
         Route::get('/case-filing-media/{media}', [AdminCaseEntryController::class, 'filingMedia']);
         Route::get('/case-closing-media/{media}', [AdminCaseEntryController::class, 'closingMedia']);
@@ -173,6 +174,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/patrol-entries/{entry}/route-points', [PatrolEntryController::class, 'routePoints']);
     Route::get('/patrol-entries/{entry}/start-selfie', [PatrolEntryController::class, 'startSelfie'])->name('app.patrol-start-selfie');
     Route::get('/patrol-entries/{entry}/end-selfie', [PatrolEntryController::class, 'endSelfie'])->name('app.patrol-end-selfie');
+    Route::post('/patrol-entries/{entry}/comments', [PatrolEntryController::class, 'addComment']);
+    Route::patch('/patrol-entries/{entry}/comments/{comment}', [PatrolEntryController::class, 'updateComment']);
 
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
@@ -182,6 +185,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/activities/{activity}/participants', [ActivityController::class, 'addParticipant']);
     Route::delete('/activities/{activity}/participants/{participant}', [ActivityController::class, 'removeParticipant']);
     Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
+    Route::post('/activities/{activity}/comments', [ActivityController::class, 'addComment']);
+    Route::patch('/activities/{activity}/comments/{comment}', [ActivityController::class, 'updateComment']);
 
     Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
 
@@ -205,4 +210,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/cases/{case}/route-points', [CaseEntryController::class, 'routePoints']);
     Route::post('/cases/{case}/gps', [CaseEntryController::class, 'addGpsPing']);
     Route::get('/cases/{case}/start-selfie', [CaseEntryController::class, 'startSelfie'])->name('app.case-start-selfie');
+    Route::get('/cases/{case}/end-selfie', [CaseEntryController::class, 'endSelfie'])->name('app.case-end-selfie');
+    Route::post('/cases/{case}/comments', [CaseEntryController::class, 'addComment']);
+    Route::patch('/cases/{case}/comments/{comment}', [CaseEntryController::class, 'updateComment']);
 });

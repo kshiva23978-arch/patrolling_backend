@@ -47,7 +47,7 @@ class Roles extends Model
     ];
 
     /** Every app-side feature a role's permissions can name. */
-    public const APP_FEATURES = ['patrolling', 'case', 'activity'];
+    public const APP_FEATURES = ['patrolling', 'case', 'activity', 'comment'];
 
     protected function casts(): array
     {

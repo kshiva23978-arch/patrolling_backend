@@ -9,11 +9,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 /**
- * An admin-authored comment on a patrol entry — the admin panel's own
- * running discussion/annotation thread, separate from a ranger's in-app
- * {@see PatrolNote}.
+ * A comment on a patrol entry — either admin-authored (the admin panel's
+ * own running discussion/annotation thread) or, once completed, authored
+ * by a ranger with the app-side `comment` permission (see
+ * `Roles::APP_FEATURES`) directly from the app. Exactly one of
+ * {@see admin}/{@see user} is ever set; separate from a ranger's in-app
+ * {@see PatrolNote}, which is queued/synced like any other patrol data
+ * rather than posted live. Editable only by the ranger who wrote it (an
+ * admin's comment is never editable from the app) — {@see UPDATED_AT}
+ * tracks that.
  */
-#[Fillable(['pec_id', 'pec_entry_id', 'pec_admin_id', 'pec_text', 'pec_created_at'])]
+#[Fillable(['pec_id', 'pec_entry_id', 'pec_admin_id', 'pec_user_id', 'pec_text', 'pec_created_at', 'pec_updated_at'])]
 class PatrolEntryComment extends Model
 {
     use HasFactory;
@@ -28,7 +34,7 @@ class PatrolEntryComment extends Model
 
     public const CREATED_AT = 'pec_created_at';
 
-    public const UPDATED_AT = null;
+    public const UPDATED_AT = 'pec_updated_at';
 
     protected static function booted(): void
     {
@@ -41,6 +47,7 @@ class PatrolEntryComment extends Model
     {
         return [
             'pec_created_at' => 'datetime',
+            'pec_updated_at' => 'datetime',
         ];
     }
 
@@ -52,5 +59,10 @@ class PatrolEntryComment extends Model
     public function admin(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'pec_admin_id', 'a_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pec_user_id', 'u_id');
     }
 }

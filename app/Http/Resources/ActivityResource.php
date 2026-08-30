@@ -49,6 +49,7 @@ class ActivityResource extends JsonResource
                     'created_at' => $m->acm_created_at?->toISOString(),
                 ]),
             ),
+            'comments' => $this->whenLoaded('comments', fn () => ActivityCommentResource::collection($this->comments)),
         ];
     }
 

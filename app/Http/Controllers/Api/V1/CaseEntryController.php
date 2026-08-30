@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CaseEntryCommentResource;
 use App\Http\Resources\CaseEntryFilingResource;
 use App\Http\Resources\CaseEntryIncidentResource;
 use App\Http\Resources\CaseEntryNoteResource;
@@ -12,6 +13,7 @@ use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
 use App\Models\CaseEntry;
 use App\Models\CaseEntryClosingMedia;
+use App\Models\CaseEntryComment;
 use App\Models\CaseEntryFiling;
 use App\Models\CaseEntryFilingMedia;
 use App\Models\CaseEntryIncident;
@@ -121,11 +123,20 @@ class CaseEntryController extends Controller
             ->all();
     }
 
+    /** See `PatrolEntryController::index`'s identical doc comment. */
     public function index(Request $request)
     {
+        $rangeIds = $request->user()->ranges()->pluck('ranges.rn_id');
+
         $cases = CaseEntry::query()
-            ->where('ce_leader_id', $request->user()->u_id)
-            ->with(['range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media', 'notes'])
+            ->where(function ($query) use ($request, $rangeIds) {
+                $query->where('ce_leader_id', $request->user()->u_id)
+                    ->orWhereIn('ce_range_id', $rangeIds);
+            })
+            ->with([
+                'range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media',
+                'notes', 'comments.admin', 'comments.user.details',
+            ])
             ->latest('ce_created_at')
             ->paginate(15);
 
@@ -144,9 +155,11 @@ class CaseEntryController extends Controller
 
     public function show(Request $request, CaseEntry $case)
     {
-        $this->authorizeOwner($request, $case);
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
-        $case->load(['range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media', 'notes', 'closingMedia']);
+        $case->load(['range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media', 'notes', 'closingMedia', 'comments.admin', 'comments.user.details']);
 
         return response()->json([
             'success' => true,
@@ -435,12 +448,12 @@ class CaseEntryController extends Controller
 
     /**
      * Update modes/staff/vehicles for a pending or in-progress case — same
-     * shape as {@see PatrolEntryController::update}.
+     * shape as {@see PatrolEntryController::update}, including the same
+     * lack of a status guard (see that method's doc comment).
      */
     public function update(Request $request, CaseEntry $case)
     {
         $this->authorizeOwner($request, $case);
-        $this->assertNotCompleted($case);
 
         $validated = $request->validate([
             'mode_ids' => ['sometimes', 'array', 'min:1'],
@@ -614,7 +627,7 @@ class CaseEntryController extends Controller
     public function addIncident(Request $request, CaseEntry $case)
     {
         $this->authorizeOwner($request, $case);
-        $this->assertInProgress($case);
+        $this->assertStarted($case);
 
         $validated = $request->validate([
             // See PatrolEntryController::addIncident()'s `client_id` for why.
@@ -704,7 +717,7 @@ class CaseEntryController extends Controller
     public function addFiling(Request $request, CaseEntry $case)
     {
         $this->authorizeOwner($request, $case);
-        $this->assertInProgress($case);
+        $this->assertStarted($case);
 
         $validated = $request->validate([
             // See PatrolEntryController::addIncident()'s `client_id` for why.
@@ -796,7 +809,7 @@ class CaseEntryController extends Controller
     public function addNote(Request $request, CaseEntry $case)
     {
         $this->authorizeOwner($request, $case);
-        $this->assertInProgress($case);
+        $this->assertStarted($case);
 
         $validated = $request->validate([
             'text' => ['required', 'string', 'max:5000'],
@@ -814,6 +827,73 @@ class CaseEntryController extends Controller
             'message' => 'Note recorded successfully.',
             'data' => new CaseEntryNoteResource($note),
         ], 201);
+    }
+
+    /** See `PatrolEntryController::addComment`'s identical doc comment. */
+    public function addComment(Request $request, CaseEntry $case)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to add comments.");
+        }
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
+        if ($case->ce_status !== CaseEntry::STATUS_COMPLETED) {
+            abort(409, 'Comments can only be added once the case has closed.');
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment = CaseEntryComment::create([
+            'cec_case_id' => $case->ce_id,
+            'cec_user_id' => $user->u_id,
+            'cec_text' => $validated['text'],
+            'cec_created_at' => now(),
+        ]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment added successfully.',
+            'data' => new CaseEntryCommentResource($comment),
+        ], 201);
+    }
+
+    /** See `PatrolEntryController::updateComment`'s identical doc comment. */
+    public function updateComment(Request $request, CaseEntry $case, CaseEntryComment $comment)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to edit comments.");
+        }
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
+        if ($comment->cec_case_id !== $case->ce_id) {
+            abort(404);
+        }
+        if ($comment->cec_user_id !== $user->u_id) {
+            abort(403, 'You can only edit your own comments.');
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment->update([
+            'cec_text' => $validated['text'],
+            'cec_updated_at' => now(),
+        ]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment updated successfully.',
+            'data' => new CaseEntryCommentResource($comment),
+        ]);
     }
 
     public function updateIncidentStatus(Request $request, CaseEntry $case, CaseEntryIncident $incident)
@@ -887,6 +967,20 @@ class CaseEntryController extends Controller
     }
 
     /**
+     * Streams the selfie captured to close this case — see {@see closeCase}.
+     */
+    public function endSelfie(Request $request, CaseEntry $case)
+    {
+        $this->authorizeOwner($request, $case);
+
+        if ($case->ce_end_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($case->ce_end_selfie_disk)->response($case->ce_end_selfie_path);
+    }
+
+    /**
      * Streams one filing photo — see {@see incidentMedia}.
      */
     public function filingMedia(Request $request, CaseEntryFilingMedia $media)
@@ -908,10 +1002,13 @@ class CaseEntryController extends Controller
 
     /**
      * Close the case: captures end time/GPS, finalizes vehicle odometer
-     * readings, writes the closing report, and requires at least
-     * {@see CaseEntry::MIN_PHOTOS} closing photos — unlike
-     * {@see PatrolEntryController::endPatrol}, which has no photo
-     * requirement at all.
+     * readings, and requires both a closing report (unlike
+     * {@see PatrolEntryController::endPatrol}'s optional one — a case
+     * closure must always explain the outcome) and a selfie proving the
+     * ranger themself is the one closing it, same as the mandatory start
+     * selfie ({@see startCase}). No longer takes bulk evidence photos —
+     * those belong on the individual incidents/filings within the case
+     * ({@see addIncident}/{@see addFiling}), not the close action itself.
      */
     public function closeCase(Request $request, CaseEntry $case)
     {
@@ -921,13 +1018,14 @@ class CaseEntryController extends Controller
         $validated = $request->validate([
             'end_latitude' => ['required', 'numeric', 'between:-90,90'],
             'end_longitude' => ['required', 'numeric', 'between:-180,180'],
-            'report' => ['nullable', 'string', 'max:5000'],
+            'report' => ['required', 'string', 'max:5000'],
             'vehicle_odometers' => ['sometimes', 'array'],
             'vehicle_odometers.*.cev_id' => ['required_with:vehicle_odometers', 'uuid'],
             'vehicle_odometers.*.end_odometer' => ['required_with:vehicle_odometers', 'numeric', 'min:0', 'max:9999999.99'],
-            'photos' => ['required', 'array', 'min:'.CaseEntry::MIN_PHOTOS, 'max:20'],
-            'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
+
+        $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'case-end-selfies/'.$case->ce_id);
 
         $caseVehicles = $case->vehicles()->get()->keyBy('cev_id');
 
@@ -947,7 +1045,7 @@ class CaseEntryController extends Controller
             }
         }
 
-        $case = DB::transaction(function () use ($case, $validated) {
+        $case = DB::transaction(function () use ($case, $validated, $storedSelfie) {
             foreach ($validated['vehicle_odometers'] ?? [] as $reading) {
                 CaseEntryVehicle::where('cev_id', $reading['cev_id'])
                     ->update(['cev_end_odometer' => $reading['end_odometer']]);
@@ -959,22 +1057,13 @@ class CaseEntryController extends Controller
                 'ce_end_time' => now()->format('H:i:s'),
                 'ce_end_latitude' => $validated['end_latitude'],
                 'ce_end_longitude' => $validated['end_longitude'],
-                'ce_report' => $validated['report'] ?? $case->ce_report,
+                'ce_report' => $validated['report'],
                 'ce_total_distance' => $totalDistance,
+                'ce_end_selfie_disk' => 'local',
+                'ce_end_selfie_path' => $storedSelfie['path'],
                 'ce_ended_at' => now(),
                 'ce_status' => CaseEntry::STATUS_COMPLETED,
             ]);
-
-            foreach ($validated['photos'] as $photo) {
-                $stored = $this->photos->compressAndStore($photo, 'case-closing-media/'.$case->ce_id);
-
-                CaseEntryClosingMedia::create([
-                    'cecm_case_id' => $case->ce_id,
-                    'cecm_disk' => 'local',
-                    'cecm_file_path' => $stored['path'],
-                    'cecm_file_size' => $stored['size'],
-                ]);
-            }
 
             return $case;
         });
@@ -1004,6 +1093,17 @@ class CaseEntryController extends Controller
         }
     }
 
+    /** See `PatrolEntryController::canViewEntry`'s identical doc comment. */
+    private function canViewEntry(Request $request, CaseEntry $case): bool
+    {
+        $user = $request->user();
+        if ($case->ce_leader_id === $user->u_id) {
+            return true;
+        }
+
+        return $user->ranges()->where('ranges.rn_id', $case->ce_range_id)->exists();
+    }
+
     private function assertInProgress(CaseEntry $case): void
     {
         if ($case->ce_status !== CaseEntry::STATUS_IN_PROGRESS) {
@@ -1015,6 +1115,17 @@ class CaseEntryController extends Controller
     {
         if ($case->ce_status === CaseEntry::STATUS_COMPLETED) {
             abort(409, 'This case has already ended.');
+        }
+    }
+
+    /**
+     * See {@see PatrolEntryController::assertStarted} for the full
+     * reasoning — same fix, same shape, mirrored here for the Case module.
+     */
+    private function assertStarted(CaseEntry $case): void
+    {
+        if ($case->ce_status === CaseEntry::STATUS_PENDING) {
+            abort(409, 'Start this case before adding data to it.');
         }
     }
 

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ActivityCommentResource;
 use App\Http\Resources\ActivityResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Activity;
+use App\Models\ActivityComment;
 use App\Models\ActivityMedia;
 use App\Models\ActivityParticipant;
 use App\Services\PatrolPhotoService;
@@ -32,10 +34,21 @@ class ActivityController extends Controller
     /**
      * This ranger's own activities, most recent first.
      */
+    /**
+     * Unlike Patrol/Case, an Activity is deliberately never tied to a
+     * range (see the `activities` table migration's own doc comment) —
+     * there's nothing to scope a Ranger's broader view by here. Own
+     * activities are always visible, same as before; a ranger with the
+     * app-side `comment` permission additionally sees every other ranger's
+     * activities too (there being no range to bound that to), so they can
+     * review and comment on them — see {@see canViewEntry}.
+     */
     public function index(Request $request)
     {
-        $activities = Activity::where('act_created_by', $request->user()->u_id)
-            ->with(['participants', 'media'])
+        $user = $request->user();
+        $activities = Activity::query()
+            ->when(! $user->hasAppFeature('comment'), fn ($query) => $query->where('act_created_by', $user->u_id))
+            ->with(['participants', 'media', 'comments.admin', 'comments.user.details'])
             ->latest('act_created_at')
             ->paginate(15);
 
@@ -54,8 +67,10 @@ class ActivityController extends Controller
 
     public function show(Request $request, Activity $activity)
     {
-        $this->authorizeOwner($request, $activity);
-        $activity->load(['participants', 'media']);
+        if (! $this->canViewEntry($request, $activity)) {
+            abort(403, 'You do not have access to this activity.');
+        }
+        $activity->load(['participants', 'media', 'comments.admin', 'comments.user.details']);
 
         return response()->json([
             'success' => true,
@@ -412,6 +427,85 @@ class ActivityController extends Controller
         if ($activity->act_created_by !== $request->user()->u_id) {
             abort(403, 'You are not the owner of this activity.');
         }
+    }
+
+    /**
+     * Own activity, or (since there's no range to bound a broader view by
+     * here — see the `index()` doc comment) any activity at all as long as
+     * the viewer has the app-side `comment` permission.
+     */
+    private function canViewEntry(Request $request, Activity $activity): bool
+    {
+        $user = $request->user();
+        if ($activity->act_created_by === $user->u_id) {
+            return true;
+        }
+
+        return $user->hasAppFeature('comment');
+    }
+
+    /**
+     * Adds one comment — mirrors PatrolEntryController::addComment /
+     * CaseEntryController::addComment. Restricted to accounts with the
+     * app-side `comment` permission (Ranger role only, not Field Staff),
+     * and only once the activity has ended.
+     */
+    public function addComment(Request $request, Activity $activity)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to add comments.");
+        }
+        if (! $this->canViewEntry($request, $activity)) {
+            abort(403, 'You do not have access to this activity.');
+        }
+        if ($activity->act_status !== Activity::STATUS_COMPLETED) {
+            abort(409, 'Comments can only be added once the activity has ended.');
+        }
+
+        $validated = $request->validate(['text' => ['required', 'string', 'max:5000']]);
+
+        $comment = ActivityComment::create([
+            'atc_activity_id' => $activity->act_id,
+            'atc_user_id' => $user->u_id,
+            'atc_text' => $validated['text'],
+            'atc_created_at' => now(),
+        ]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment added successfully.',
+            'data' => new ActivityCommentResource($comment),
+        ], 201);
+    }
+
+    public function updateComment(Request $request, Activity $activity, ActivityComment $comment)
+    {
+        $user = $request->user();
+        if (! $user->hasAppFeature('comment')) {
+            abort(403, "You don't have permission to edit comments.");
+        }
+        if (! $this->canViewEntry($request, $activity)) {
+            abort(403, 'You do not have access to this activity.');
+        }
+        if ($comment->atc_activity_id !== $activity->act_id) {
+            abort(404);
+        }
+        if ($comment->atc_user_id !== $user->u_id) {
+            abort(403, 'You can only edit your own comments.');
+        }
+
+        $validated = $request->validate(['text' => ['required', 'string', 'max:5000']]);
+
+        $comment->update(['atc_text' => $validated['text'], 'atc_updated_at' => now()]);
+        $comment->setRelation('user', $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment updated successfully.',
+            'data' => new ActivityCommentResource($comment),
+        ]);
     }
 
     private function assertInProgress(Activity $activity): void

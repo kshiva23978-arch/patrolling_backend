@@ -164,6 +164,17 @@ class AdminCaseEntryController extends Controller
         return Storage::disk($case->ce_start_selfie_disk)->response($case->ce_start_selfie_path);
     }
 
+    public function endSelfie(Request $request, CaseEntry $case)
+    {
+        $this->assertRangeAccessible($request, $case->ce_range_id);
+
+        if ($case->ce_end_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($case->ce_end_selfie_disk)->response($case->ce_end_selfie_path);
+    }
+
     /** Streams a case-filing photo. */
     public function filingMedia(Request $request, CaseEntryFilingMedia $media)
     {

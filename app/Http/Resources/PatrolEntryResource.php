@@ -109,6 +109,7 @@ class PatrolEntryResource extends JsonResource
                 'text' => $n->pn_text,
                 'created_at' => $n->pn_created_at?->toISOString(),
             ])),
+            'comments' => $this->whenLoaded('comments', fn () => PatrolEntryCommentResource::collection($this->comments)),
             'custom_field_values' => $this->whenLoaded('customFieldValues', fn () => $this->customFieldValues->map(fn ($v) => [
                 'custom_field_id' => $v->pcfv_custom_field_id,
                 'field_name' => $v->customField?->rcf_field_name,

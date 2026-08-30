@@ -66,4 +66,10 @@ class Activity extends Model
         return $this->hasMany(ActivityMedia::class, 'acm_activity_id', 'act_id')
             ->orderBy('acm_created_at');
     }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ActivityComment::class, 'atc_activity_id', 'act_id')
+            ->orderBy('atc_created_at');
+    }
 }

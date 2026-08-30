@@ -58,6 +58,9 @@ class CaseEntryResource extends JsonResource
             'start_selfie_url' => $this->ce_start_selfie_path
                 ? route('app.case-start-selfie', $this->ce_id)
                 : null,
+            'end_selfie_url' => $this->ce_end_selfie_path
+                ? route('app.case-end-selfie', $this->ce_id)
+                : null,
             'total_distance' => $this->toFloat($this->ce_total_distance),
             'incident_occurred' => $this->ce_incident_occurred,
             'case_filed' => $this->ce_case_filed,
@@ -106,6 +109,7 @@ class CaseEntryResource extends JsonResource
                 'text' => $n->cen_text,
                 'created_at' => $n->cen_created_at?->toISOString(),
             ])),
+            'comments' => $this->whenLoaded('comments', fn () => CaseEntryCommentResource::collection($this->comments)),
             'closing_photos' => $this->whenLoaded('closingMedia', fn () => $this->closingMedia->map(fn ($m) => [
                 'id' => $m->cecm_id,
                 'url' => route('app.case-closing-media', $m->cecm_id),
