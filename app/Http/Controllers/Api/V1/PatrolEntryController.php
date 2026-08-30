@@ -10,7 +10,6 @@ use App\Http\Resources\PatrolNoteResource;
 use App\Http\Resources\PatrolRoutePointResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
-use App\Models\CaseEntry;
 use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
@@ -27,6 +26,7 @@ use App\Models\RangeCustomField;
 use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
+use App\Services\UnfinishedWorkChecker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +38,7 @@ class PatrolEntryController extends Controller
 {
     public function __construct(
         private readonly PatrolPhotoService $photos,
+        private readonly UnfinishedWorkChecker $unfinishedWork,
     ) {}
 
     /**
@@ -245,37 +246,14 @@ class PatrolEntryController extends Controller
 
         // Scoped to this device (its own Sanctum token — one per login, see
         // AuthController::attemptLogin), not the account as a whole: the
-        // same ranger is allowed one unfinished patrol per device (e.g. a
-        // phone and a spare tablet in the field at the same time), just not
-        // two at once from the same one.
+        // same ranger is allowed one active item per device (e.g. a phone
+        // and a spare tablet in the field at the same time), just not two
+        // at once from the same one. Only an in-progress patrol/case/
+        // activity blocks — see UnfinishedWorkChecker.
         $tokenId = $user->currentAccessToken()?->id;
 
-        $hasUnfinishedEntry = PatrollingEntries::where('pe_patrol_leader_id', $user->u_id)
-            // Falls back to the old account-wide check on the (practically
-            // never happening, for a token-authenticated API request) case
-            // there's no current token to scope by, rather than silently
-            // matching nothing and disabling the restriction outright.
-            ->when(
-                $tokenId !== null,
-                fn ($q) => $q->where('pe_created_via_token_id', $tokenId),
-            )
-            ->whereIn('pe_status', [PatrollingEntries::STATUS_PENDING, PatrollingEntries::STATUS_IN_PROGRESS])
-            ->exists();
-
-        // Same rule extends across the independent Case module (see
-        // CaseEntryController::hasUnfinishedActivity, which carries the
-        // matching check on its own side) — a ranger can only be actively
-        // patrolling or working a case, never both at once.
-        $hasUnfinishedCase = ! $hasUnfinishedEntry && CaseEntry::where('ce_leader_id', $user->u_id)
-            ->when(
-                $tokenId !== null,
-                fn ($q) => $q->where('ce_created_via_token_id', $tokenId),
-            )
-            ->whereIn('ce_status', [CaseEntry::STATUS_PENDING, CaseEntry::STATUS_IN_PROGRESS])
-            ->exists();
-
-        if ($hasUnfinishedEntry || $hasUnfinishedCase) {
-            abort(409, 'You already have a patrol or case that has not ended yet. End it before creating a new one.');
+        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
+            abort(409, 'You already have a patrol, case, or activity that has not ended yet. End it before creating a new one.');
         }
 
         if (isset($validated['staff_names']) && count($validated['staff_names']) > $validated['pe_staff_deployed_count']) {

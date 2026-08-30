@@ -118,9 +118,8 @@ class CaseEntryResource extends JsonResource
             'created_at' => $this->ce_created_at?->toISOString(),
             'updated_at' => $this->ce_updated_at?->toISOString(),
             // See PatrolEntryResource's matching field for why this exists —
-            // same "unfinished patrol/case" rule, scoped per device, cross-
-            // checked against this module too (see
-            // CaseEntryController::hasUnfinishedActivity).
+            // same "unfinished patrol/case/activity" rule, scoped per device
+            // (see App\Services\UnfinishedWorkChecker).
             'is_this_device' => $this->createdViaCurrentToken($request),
         ];
     }

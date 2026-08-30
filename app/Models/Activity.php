@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'act_id', 'act_name', 'act_description', 'act_latitude', 'act_longitude',
-    'act_address', 'act_conducted_by', 'act_created_by', 'act_status',
+    'act_address', 'act_conducted_by', 'act_created_by', 'act_created_via_token_id', 'act_status',
     'act_report', 'act_started_at', 'act_ended_at',
     'act_created_at', 'act_updated_at',
 ])]

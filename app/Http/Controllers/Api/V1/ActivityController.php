@@ -9,6 +9,7 @@ use App\Models\Activity;
 use App\Models\ActivityMedia;
 use App\Models\ActivityParticipant;
 use App\Services\PatrolPhotoService;
+use App\Services\UnfinishedWorkChecker;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,10 @@ use Illuminate\Support\Facades\Storage;
  */
 class ActivityController extends Controller
 {
-    public function __construct(private readonly PatrolPhotoService $photos) {}
+    public function __construct(
+        private readonly PatrolPhotoService $photos,
+        private readonly UnfinishedWorkChecker $unfinishedWork,
+    ) {}
 
     /**
      * This ranger's own activities, most recent first.
@@ -98,6 +102,16 @@ class ActivityController extends Controller
             }
         }
 
+        // Scoped to this device (its own Sanctum token — one per login, see
+        // AuthController::attemptLogin), not the account as a whole: the
+        // same ranger is allowed one active item per device, just not two
+        // at once from the same one. See UnfinishedWorkChecker.
+        $tokenId = $user->currentAccessToken()?->id;
+
+        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
+            abort(409, 'You already have a patrol, case, or activity that has not ended yet. End it before starting a new one.');
+        }
+
         try {
             $activity = Activity::create([
                 'act_id' => $validated['act_id'] ?? null,
@@ -105,6 +119,7 @@ class ActivityController extends Controller
                 'act_description' => $validated['description'] ?? null,
                 'act_conducted_by' => $validated['conducted_by'],
                 'act_created_by' => $user->u_id,
+                'act_created_via_token_id' => $tokenId,
                 'act_status' => Activity::STATUS_IN_PROGRESS,
                 'act_latitude' => $validated['latitude'] ?? null,
                 'act_longitude' => $validated['longitude'] ?? null,

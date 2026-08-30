@@ -23,6 +23,13 @@ class ActivityResource extends JsonResource
             'report' => $this->act_report,
             'started_at' => $this->act_started_at?->toISOString(),
             'ended_at' => $this->act_ended_at?->toISOString(),
+            // See PatrolEntryResource::createdViaCurrentToken — same
+            // reasoning, now that an in-progress activity also blocks the
+            // cross-module "one active item at a time" rule (see
+            // UnfinishedWorkChecker): the app needs to tell "my own
+            // in-progress activity, on this device" apart from "this
+            // ranger's other device has one going".
+            'is_this_device' => $this->createdViaCurrentToken($request),
             'participants' => $this->whenLoaded(
                 'participants',
                 fn () => $this->participants->map(fn ($p) => [
@@ -43,5 +50,15 @@ class ActivityResource extends JsonResource
                 ]),
             ),
         ];
+    }
+
+    /** See PatrolEntryResource::createdViaCurrentToken — same reasoning. */
+    private function createdViaCurrentToken(Request $request): bool
+    {
+        $currentTokenId = $request->user()?->currentAccessToken()?->id;
+
+        return $this->act_created_via_token_id !== null
+            && $currentTokenId !== null
+            && (int) $this->act_created_via_token_id === (int) $currentTokenId;
     }
 }

@@ -20,10 +20,10 @@ use App\Models\CaseEntryNote;
 use App\Models\CaseEntryNumberSequence;
 use App\Models\CaseEntryRoutePoint;
 use App\Models\CaseEntryVehicle;
-use App\Models\PatrollingEntries;
 use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
+use App\Services\UnfinishedWorkChecker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -38,11 +38,14 @@ use Illuminate\Validation\ValidationException;
  * {@see PatrolEntryController} method-for-method; deltas are called out
  * inline as they come up (free-text case type instead of a patrol-type FK,
  * mandatory minimum photo counts on Add Incident/File Case/Close Case, and
- * the cross-table "one active Patrol XOR Case" rule).
+ * the cross-module "one active Patrol/Case/Activity at a time" rule).
  */
 class CaseEntryController extends Controller
 {
-    public function __construct(private readonly PatrolPhotoService $photos) {}
+    public function __construct(
+        private readonly PatrolPhotoService $photos,
+        private readonly UnfinishedWorkChecker $unfinishedWork,
+    ) {}
 
     /**
      * Free-text values already used for [field] within [range_id] — powers
@@ -167,9 +170,9 @@ class CaseEntryController extends Controller
 
     /**
      * Create a new case — starts out "pending", same three-state lifecycle
-     * as a patrol entry. Blocked if the ranger has any unfinished Patrol
-     * *or* Case already (see {@see hasUnfinishedActivity}) — a ranger can
-     * only be actively doing one or the other at a time.
+     * as a patrol entry. Blocked if the ranger already has an in-progress
+     * Patrol, Case, or Activity (see {@see UnfinishedWorkChecker}) — a
+     * ranger can only be actively doing one at a time.
      */
     public function store(Request $request)
     {
@@ -226,8 +229,8 @@ class CaseEntryController extends Controller
 
         $tokenId = $user->currentAccessToken()?->id;
 
-        if ($this->hasUnfinishedActivity($user->u_id, $tokenId)) {
-            abort(409, 'You already have a patrol or case that has not ended yet. End it before starting a new one.');
+        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
+            abort(409, 'You already have a patrol, case, or activity that has not ended yet. End it before starting a new one.');
         }
 
         if (isset($validated['staff_names']) && count($validated['staff_names']) > $validated['ce_staff_deployed_count']) {
@@ -300,29 +303,6 @@ class CaseEntryController extends Controller
             'message' => 'Case created successfully.',
             'data' => new CaseEntryResource($case),
         ], 201);
-    }
-
-    /**
-     * `true` if [userId] has any unfinished Patrol *or* Case on [tokenId]'s
-     * device — the cross-table half of the "one active Patrol XOR Case"
-     * rule; {@see PatrolEntryController::store} carries the matching check
-     * against `case_entries` on its own side.
-     */
-    private function hasUnfinishedActivity(string $userId, ?int $tokenId): bool
-    {
-        $hasUnfinishedCase = CaseEntry::where('ce_leader_id', $userId)
-            ->when($tokenId !== null, fn ($q) => $q->where('ce_created_via_token_id', $tokenId))
-            ->whereIn('ce_status', [CaseEntry::STATUS_PENDING, CaseEntry::STATUS_IN_PROGRESS])
-            ->exists();
-
-        if ($hasUnfinishedCase) {
-            return true;
-        }
-
-        return PatrollingEntries::where('pe_patrol_leader_id', $userId)
-            ->when($tokenId !== null, fn ($q) => $q->where('pe_created_via_token_id', $tokenId))
-            ->whereIn('pe_status', [PatrollingEntries::STATUS_PENDING, PatrollingEntries::STATUS_IN_PROGRESS])
-            ->exists();
     }
 
     /**
