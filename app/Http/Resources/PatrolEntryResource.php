@@ -66,6 +66,9 @@ class PatrolEntryResource extends JsonResource
             'start_selfie_url' => $this->pe_start_selfie_path
                 ? route('app.patrol-start-selfie', $this->pe_id)
                 : null,
+            'end_selfie_url' => $this->pe_end_selfie_path
+                ? route('app.patrol-end-selfie', $this->pe_id)
+                : null,
             'total_distance' => $this->pe_total_distance,
             'distance' => $this->whenLoaded('routePoints', fn () => $this->distanceSummary()),
             'incident_occurred' => $this->pe_incident_occurred,
@@ -118,6 +121,34 @@ class PatrolEntryResource extends JsonResource
             'ended_at' => $this->pe_ended_at?->toISOString(),
             'created_at' => $this->pe_created_at?->toISOString(),
             'updated_at' => $this->pe_updated_at?->toISOString(),
+            // Lets the app tell "my own unfinished patrol, on this device"
+            // apart from "this ranger's other device has one going" — the
+            // "you already have an unfinished patrol/case" rule this
+            // mirrors ({@see PatrolEntryController::store}) is scoped per
+            // device (its Sanctum token), not per account, specifically so
+            // a second device can start its own independent patrol/case
+            // while another is still in progress elsewhere. Without this,
+            // the app's own pre-emptive "unfinished entry" check (shown as
+            // a friendly redirect before ever calling the API) would have
+            // no way to know that and would incorrectly block a device the
+            // backend would actually allow.
+            'is_this_device' => $this->createdViaCurrentToken($request),
         ];
+    }
+
+    /**
+     * Whether this entry's `pe_created_via_token_id` matches the Sanctum
+     * token the current request authenticated with — both sides must be
+     * genuinely present and equal; two `null`s (a legacy entry with no
+     * recorded device, compared against a request that somehow has no
+     * current token) must never read as a match.
+     */
+    private function createdViaCurrentToken(Request $request): bool
+    {
+        $currentTokenId = $request->user()?->currentAccessToken()?->id;
+
+        return $this->pe_created_via_token_id !== null
+            && $currentTokenId !== null
+            && (int) $this->pe_created_via_token_id === (int) $currentTokenId;
     }
 }

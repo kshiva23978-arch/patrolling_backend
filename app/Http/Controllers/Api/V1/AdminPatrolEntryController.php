@@ -301,6 +301,21 @@ class AdminPatrolEntryController extends Controller
     }
 
     /**
+     * Streams the selfie the ranger captured to end this patrol — see
+     * {@see \App\Http\Controllers\Api\V1\PatrolEntryController::endPatrol}.
+     */
+    public function endSelfie(Request $request, PatrollingEntries $entry)
+    {
+        $this->assertRangeAccessible($request, $entry->pe_range_id);
+
+        if ($entry->pe_end_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($entry->pe_end_selfie_disk)->response($entry->pe_end_selfie_path);
+    }
+
+    /**
      * Streams a case-report photo. Photos are stored privately (not on a
      * publicly-served disk), so the admin panel proxies this through its
      * own server-side route rather than linking to it directly.

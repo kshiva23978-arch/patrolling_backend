@@ -23,6 +23,7 @@ class AdminCaseEntryResource extends JsonResource
                     'employee_id' => $this->leader->u_employee_id,
                     'name' => $this->leader->details?->ud_fullname,
                 ]),
+                'has_start_selfie' => $this->ce_start_selfie_path !== null,
             ]
         );
     }

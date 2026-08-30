@@ -55,6 +55,9 @@ class CaseEntryResource extends JsonResource
                 'longitude' => $this->toFloat($this->ce_end_longitude),
                 'address' => $this->ce_end_address,
             ],
+            'start_selfie_url' => $this->ce_start_selfie_path
+                ? route('app.case-start-selfie', $this->ce_id)
+                : null,
             'total_distance' => $this->toFloat($this->ce_total_distance),
             'incident_occurred' => $this->ce_incident_occurred,
             'case_filed' => $this->ce_case_filed,
@@ -114,6 +117,11 @@ class CaseEntryResource extends JsonResource
             'ended_at' => $this->ce_ended_at?->toISOString(),
             'created_at' => $this->ce_created_at?->toISOString(),
             'updated_at' => $this->ce_updated_at?->toISOString(),
+            // See PatrolEntryResource's matching field for why this exists —
+            // same "unfinished patrol/case" rule, scoped per device, cross-
+            // checked against this module too (see
+            // CaseEntryController::hasUnfinishedActivity).
+            'is_this_device' => $this->createdViaCurrentToken($request),
         ];
     }
 
@@ -126,5 +134,15 @@ class CaseEntryResource extends JsonResource
     private function toFloat(mixed $value): ?float
     {
         return $value !== null ? (float) $value : null;
+    }
+
+    /** See PatrolEntryResource::createdViaCurrentToken — same reasoning. */
+    private function createdViaCurrentToken(Request $request): bool
+    {
+        $currentTokenId = $request->user()?->currentAccessToken()?->id;
+
+        return $this->ce_created_via_token_id !== null
+            && $currentTokenId !== null
+            && (int) $this->ce_created_via_token_id === (int) $currentTokenId;
     }
 }

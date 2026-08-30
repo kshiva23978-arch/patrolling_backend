@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
     'ce_id', 'ce_case_number', 'ce_date', 'ce_start_time', 'ce_end_time',
     'ce_range_id', 'ce_beat_id', 'ce_area_covered', 'ce_case_type',
     'ce_start_latitude', 'ce_start_longitude', 'ce_end_latitude', 'ce_end_longitude',
-    'ce_start_address', 'ce_end_address', 'ce_total_distance',
+    'ce_start_address', 'ce_end_address', 'ce_start_selfie_disk', 'ce_start_selfie_path', 'ce_total_distance',
     'ce_staff_deployed_count', 'ce_staff_names', 'ce_incharge_staff', 'ce_leader_id',
     'ce_created_via_token_id', 'ce_current_travel_mode', 'ce_current_vehicle_id',
     'ce_incident_occurred', 'ce_case_filed', 'ce_report',

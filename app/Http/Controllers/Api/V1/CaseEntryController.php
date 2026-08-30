@@ -354,11 +354,19 @@ class CaseEntryController extends Controller
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'started_at' => ['sometimes', 'date', 'before_or_equal:now'],
+            // Proves the ranger themself is the one starting this case —
+            // mandatory here too, same as a patrol's own start selfie (see
+            // PatrolEntryController::startPatrol).
+            'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
+
+        $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'case-start-selfies/'.$case->ce_id);
 
         $case->update([
             'ce_start_latitude' => $validated['latitude'],
             'ce_start_longitude' => $validated['longitude'],
+            'ce_start_selfie_disk' => 'local',
+            'ce_start_selfie_path' => $storedSelfie['path'],
             'ce_status' => CaseEntry::STATUS_IN_PROGRESS,
             'ce_started_at' => $validated['started_at'] ?? now(),
         ]);
@@ -882,6 +890,20 @@ class CaseEntryController extends Controller
         $this->authorizeOwner($request, $media->incident->case);
 
         return Storage::disk($media->ceim_disk)->response($media->ceim_file_path);
+    }
+
+    /**
+     * Streams the selfie captured to start this case — see {@see startCase}.
+     */
+    public function startSelfie(Request $request, CaseEntry $case)
+    {
+        $this->authorizeOwner($request, $case);
+
+        if ($case->ce_start_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($case->ce_start_selfie_disk)->response($case->ce_start_selfie_path);
     }
 
     /**

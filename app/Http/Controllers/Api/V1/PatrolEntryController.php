@@ -1012,6 +1012,20 @@ class PatrolEntryController extends Controller
     }
 
     /**
+     * Streams the selfie captured to end this patrol — see {@see endPatrol}.
+     */
+    public function endSelfie(Request $request, PatrollingEntries $entry)
+    {
+        $this->authorizeOwner($request, $entry);
+
+        if ($entry->pe_end_selfie_path === null) {
+            abort(404);
+        }
+
+        return Storage::disk($entry->pe_end_selfie_disk)->response($entry->pe_end_selfie_path);
+    }
+
+    /**
      * Streams one case-report photo — see {@see incidentMedia}.
      */
     public function caseReportMedia(Request $request, PatrolCaseMedia $media)
@@ -1040,7 +1054,12 @@ class PatrolEntryController extends Controller
             'custom_field_values' => ['sometimes', 'array'],
             'custom_field_values.*.custom_field_id' => ['required_with:custom_field_values', 'uuid'],
             'custom_field_values.*.value' => ['nullable'],
+            // Proves the ranger themself is the one ending this patrol —
+            // mandatory here too, same as the start selfie ({@see startPatrol}).
+            'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
+
+        $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'patrol-end-selfies/'.$entry->pe_id);
 
         $customFieldValues = $this->resolveCustomFieldValues($entry, $validated['custom_field_values'] ?? []);
 
@@ -1062,7 +1081,7 @@ class PatrolEntryController extends Controller
             }
         }
 
-        $entry = DB::transaction(function () use ($entry, $validated, $customFieldValues) {
+        $entry = DB::transaction(function () use ($entry, $validated, $customFieldValues, $storedSelfie) {
             foreach ($validated['vehicle_odometers'] ?? [] as $reading) {
                 PatrolEntryVehicles::where('pev_id', $reading['pev_id'])
                     ->update(['pev_end_odometer' => $reading['end_odometer']]);
@@ -1077,6 +1096,8 @@ class PatrolEntryController extends Controller
                 'pe_area_patrolled' => $validated['area_patrolled'] ?? $entry->pe_area_patrolled,
                 'pe_remarks' => $validated['report'] ?? $entry->pe_remarks,
                 'pe_total_distance' => $totalDistance,
+                'pe_end_selfie_disk' => 'local',
+                'pe_end_selfie_path' => $storedSelfie['path'],
                 'pe_ended_at' => now(),
                 'pe_status' => PatrollingEntries::STATUS_COMPLETED,
             ]);
