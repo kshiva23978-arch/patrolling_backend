@@ -101,6 +101,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
         Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
         Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
+        Route::post('/patrol-entries/{entry}/comments', [AdminPatrolEntryController::class, 'storeComment']);
         Route::get('/case-media/{media}', [AdminPatrolEntryController::class, 'caseMedia']);
         Route::get('/incident-media/{media}', [AdminPatrolEntryController::class, 'incidentMedia']);
         Route::delete('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'destroy']);

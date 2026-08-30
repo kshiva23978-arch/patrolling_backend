@@ -121,6 +121,7 @@ class AdminPatrolEntryResource extends JsonResource
                 'input_type' => $v->customField?->rcf_input_type,
                 'value' => $v->pcfv_value,
             ])),
+            'comments' => $this->whenLoaded('comments', fn () => PatrolEntryCommentResource::collection($this->comments)),
             'started_at' => $this->pe_started_at?->toISOString(),
             'ended_at' => $this->pe_ended_at?->toISOString(),
             'created_at' => $this->pe_created_at?->toISOString(),

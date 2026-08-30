@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminPatrolEntryResource;
+use App\Http\Resources\PatrolEntryCommentResource;
 use App\Http\Resources\PatrolRoutePointResource;
 use App\Models\PatrolCaseMedia;
+use App\Models\PatrolEntryComment;
 use App\Models\PatrolIncidentMedia;
 use App\Models\PatrollingEntries;
 use Illuminate\Http\Request;
@@ -181,6 +183,7 @@ class AdminPatrolEntryController extends Controller
         $entry->load([
             'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
             'patrolLeader.details', 'caseReports.media', 'incidents.media', 'customFieldValues.customField',
+            'comments.admin',
         ]);
 
         return response()->json([
@@ -188,6 +191,36 @@ class AdminPatrolEntryController extends Controller
             'message' => 'Patrol entry retrieved successfully.',
             'data' => new AdminPatrolEntryResource($entry),
         ]);
+    }
+
+    /**
+     * Adds an admin comment to a patrol entry — the admin panel's own
+     * running discussion/annotation thread on a patrol, separate from a
+     * ranger's in-app notes. Any admin with `manage` access to this section
+     * can comment, on a patrol in any status (pending, in progress, or
+     * completed), since this is about the record rather than a live action.
+     */
+    public function storeComment(Request $request, PatrollingEntries $entry)
+    {
+        $this->assertRangeAccessible($request, $entry->pe_range_id);
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment = PatrolEntryComment::create([
+            'pec_entry_id' => $entry->pe_id,
+            'pec_admin_id' => $request->user()->a_id,
+            'pec_text' => $validated['text'],
+            'pec_created_at' => now(),
+        ]);
+        $comment->setRelation('admin', $request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comment added successfully.',
+            'data' => new PatrolEntryCommentResource($comment),
+        ], 201);
     }
 
     /**
