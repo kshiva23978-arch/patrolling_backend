@@ -27,6 +27,7 @@ use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -641,6 +642,9 @@ class CaseEntryController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'photos' => ['required', 'array', 'min:'.CaseEntry::MIN_PHOTOS, 'max:20'],
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // See PatrolEntryController::addIncident()'s `reported_at` for
+            // why — same offline-sync purpose.
+            'reported_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         if (! empty($validated['client_id'])) {
@@ -669,7 +673,7 @@ class CaseEntryController extends Controller
                 'cei_status' => $validated['status'] ?? 'open',
                 'cei_latitude' => $validated['latitude'] ?? null,
                 'cei_longitude' => $validated['longitude'] ?? null,
-                'cei_reported_at' => now(),
+                'cei_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
             ]);
 
             foreach ($validated['photos'] as $photo) {
@@ -735,6 +739,9 @@ class CaseEntryController extends Controller
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'photos' => ['required', 'array', 'min:'.CaseEntry::MIN_PHOTOS, 'max:20'],
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // See PatrolEntryController::addIncident()'s `reported_at` for
+            // why — same offline-sync purpose.
+            'reported_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         if (! empty($validated['client_id'])) {
@@ -768,7 +775,7 @@ class CaseEntryController extends Controller
                 'cef_response_time' => $validated['response_time'] ?? null,
                 'cef_latitude' => $validated['latitude'],
                 'cef_longitude' => $validated['longitude'],
-                'cef_reported_at' => now(),
+                'cef_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
             ]);
 
             foreach ($validated['photos'] as $photo) {
@@ -1035,6 +1042,9 @@ class CaseEntryController extends Controller
             'vehicle_odometers.*.cev_id' => ['required_with:vehicle_odometers', 'uuid'],
             'vehicle_odometers.*.end_odometer' => ['required_with:vehicle_odometers', 'numeric', 'min:0', 'max:9999999.99'],
             'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // See PatrolEntryController::endPatrol()'s `ended_at` for why —
+            // same offline-sync purpose.
+            'ended_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'case-end-selfies/'.$case->ce_id);
@@ -1064,16 +1074,17 @@ class CaseEntryController extends Controller
             }
 
             $totalDistance = $case->vehicles()->sum('cev_distance');
+            $endedAt = isset($validated['ended_at']) ? Carbon::parse($validated['ended_at']) : now();
 
             $case->update([
-                'ce_end_time' => now()->format('H:i:s'),
+                'ce_end_time' => $endedAt->format('H:i:s'),
                 'ce_end_latitude' => $validated['end_latitude'],
                 'ce_end_longitude' => $validated['end_longitude'],
                 'ce_report' => $validated['report'],
                 'ce_total_distance' => $totalDistance,
                 'ce_end_selfie_disk' => 'local',
                 'ce_end_selfie_path' => $storedSelfie['path'],
-                'ce_ended_at' => now(),
+                'ce_ended_at' => $endedAt,
                 'ce_status' => CaseEntry::STATUS_COMPLETED,
             ]);
 
