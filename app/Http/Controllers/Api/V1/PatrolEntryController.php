@@ -184,7 +184,9 @@ class PatrolEntryController extends Controller
      */
     public function routePoints(Request $request, PatrollingEntries $entry)
     {
-        $this->authorizeOwner($request, $entry);
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
         $points = $entry->routePoints()->with('vehicle')->orderBy('prp_recorded_at')->get();
 
@@ -1075,7 +1077,9 @@ class PatrolEntryController extends Controller
      */
     public function incidentMedia(Request $request, PatrolIncidentMedia $media)
     {
-        $this->authorizeOwner($request, $media->incident->entry);
+        if (! $this->canViewEntry($request, $media->incident->entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
         return Storage::disk($media->pim_disk)->response($media->pim_file_path);
     }
@@ -1085,7 +1089,9 @@ class PatrolEntryController extends Controller
      */
     public function startSelfie(Request $request, PatrollingEntries $entry)
     {
-        $this->authorizeOwner($request, $entry);
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
         if ($entry->pe_start_selfie_path === null) {
             abort(404);
@@ -1099,7 +1105,9 @@ class PatrolEntryController extends Controller
      */
     public function endSelfie(Request $request, PatrollingEntries $entry)
     {
-        $this->authorizeOwner($request, $entry);
+        if (! $this->canViewEntry($request, $entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
         if ($entry->pe_end_selfie_path === null) {
             abort(404);
@@ -1113,7 +1121,9 @@ class PatrolEntryController extends Controller
      */
     public function caseReportMedia(Request $request, PatrolCaseMedia $media)
     {
-        $this->authorizeOwner($request, $media->caseReport->entry);
+        if (! $this->canViewEntry($request, $media->caseReport->entry)) {
+            abort(403, 'You do not have access to this patrol entry.');
+        }
 
         return Storage::disk($media->pcm_disk)->response($media->pcm_file_path);
     }

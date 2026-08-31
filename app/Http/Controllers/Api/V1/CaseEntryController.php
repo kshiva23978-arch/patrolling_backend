@@ -170,7 +170,9 @@ class CaseEntryController extends Controller
 
     public function routePoints(Request $request, CaseEntry $case)
     {
-        $this->authorizeOwner($request, $case);
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         $points = $case->routePoints()->with('vehicle')->orderBy('cerp_recorded_at')->get();
 
@@ -947,7 +949,9 @@ class CaseEntryController extends Controller
      */
     public function incidentMedia(Request $request, CaseEntryIncidentMedia $media)
     {
-        $this->authorizeOwner($request, $media->incident->case);
+        if (! $this->canViewEntry($request, $media->incident->case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         return Storage::disk($media->ceim_disk)->response($media->ceim_file_path);
     }
@@ -957,7 +961,9 @@ class CaseEntryController extends Controller
      */
     public function startSelfie(Request $request, CaseEntry $case)
     {
-        $this->authorizeOwner($request, $case);
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         if ($case->ce_start_selfie_path === null) {
             abort(404);
@@ -971,7 +977,9 @@ class CaseEntryController extends Controller
      */
     public function endSelfie(Request $request, CaseEntry $case)
     {
-        $this->authorizeOwner($request, $case);
+        if (! $this->canViewEntry($request, $case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         if ($case->ce_end_selfie_path === null) {
             abort(404);
@@ -985,7 +993,9 @@ class CaseEntryController extends Controller
      */
     public function filingMedia(Request $request, CaseEntryFilingMedia $media)
     {
-        $this->authorizeOwner($request, $media->filing->case);
+        if (! $this->canViewEntry($request, $media->filing->case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         return Storage::disk($media->cefm_disk)->response($media->cefm_file_path);
     }
@@ -995,7 +1005,9 @@ class CaseEntryController extends Controller
      */
     public function closingMedia(Request $request, CaseEntryClosingMedia $media)
     {
-        $this->authorizeOwner($request, $media->case);
+        if (! $this->canViewEntry($request, $media->case)) {
+            abort(403, 'You do not have access to this case.');
+        }
 
         return Storage::disk($media->cecm_disk)->response($media->cecm_file_path);
     }
