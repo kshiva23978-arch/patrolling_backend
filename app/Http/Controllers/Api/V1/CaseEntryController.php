@@ -1129,6 +1129,18 @@ class CaseEntryController extends Controller
 
     private function assertInProgress(CaseEntry $case): void
     {
+        // Distinct message from the "already ended" case below is load-bearing:
+        // the app's offline sync (CaseSyncQueueService._isStalePingAfterCaseClosed)
+        // treats a `close_case` row's "already ended" 409 as proof this same close
+        // already landed on an earlier attempt (lost response) and safely refreshes
+        // from the server — that assumption only holds when the case is genuinely
+        // `completed`. Reusing the same message for a still-`pending` case (never
+        // actually started server-side) made the client wrongly assume the close
+        // succeeded, overwrite its local cache with the server's real `pending`
+        // status, and drop the close data for good.
+        if ($case->ce_status === CaseEntry::STATUS_PENDING) {
+            abort(409, 'Start this case before ending it.');
+        }
         if ($case->ce_status !== CaseEntry::STATUS_IN_PROGRESS) {
             abort(409, 'This case has already ended.');
         }

@@ -1328,6 +1328,16 @@ class PatrolEntryController extends Controller
 
     private function assertInProgress(PatrollingEntries $entry): void
     {
+        // Distinct message from the "already ended" case below is load-bearing —
+        // see CaseEntryController::assertInProgress's identical fix for the full
+        // reasoning. The app's offline sync (SyncQueueService._isStalePingAfterPatrolEnded)
+        // treats an `end_patrol` row's "already ended" 409 as proof this same end
+        // already landed on an earlier attempt, which only holds when the entry is
+        // genuinely `completed` — a still-`pending` entry (never started server-side)
+        // needs its own message so that case isn't silently mistaken for success.
+        if ($entry->pe_status === PatrollingEntries::STATUS_PENDING) {
+            abort(409, 'Start this patrol before ending it.');
+        }
         if ($entry->pe_status !== PatrollingEntries::STATUS_IN_PROGRESS) {
             abort(409, 'This patrol entry has already ended.');
         }
