@@ -738,6 +738,11 @@ class PatrolEntryController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'photos' => ['sometimes', 'array', 'max:10'],
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // Set when the app logged this incident offline and is only now
+            // syncing — preserves the moment it was actually reported instead
+            // of stamping when connectivity happened to return. See
+            // PatrolEntryController::startPatrol()'s `started_at`.
+            'reported_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         if (! empty($validated['client_id'])) {
@@ -766,7 +771,7 @@ class PatrolEntryController extends Controller
                 'pi_status' => $validated['status'] ?? 'open',
                 'pi_latitude' => $validated['latitude'] ?? null,
                 'pi_longitude' => $validated['longitude'] ?? null,
-                'pi_reported_at' => now(),
+                'pi_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
             ]);
 
             foreach ($validated['photos'] ?? [] as $photo) {
@@ -831,6 +836,11 @@ class PatrolEntryController extends Controller
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'photos' => ['sometimes', 'array', 'max:10'],
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // Set when the app filed this case report offline and is only now
+            // syncing — preserves the moment it was actually reported instead
+            // of stamping when connectivity happened to return. See
+            // PatrolEntryController::startPatrol()'s `started_at`.
+            'reported_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         if (! empty($validated['client_id'])) {
@@ -864,7 +874,7 @@ class PatrolEntryController extends Controller
                 'pcr_response_time' => $validated['response_time'] ?? null,
                 'pcr_latitude' => $validated['latitude'],
                 'pcr_longitude' => $validated['longitude'],
-                'pcr_reported_at' => now(),
+                'pcr_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
             ]);
 
             foreach ($validated['photos'] ?? [] as $photo) {
@@ -1150,6 +1160,12 @@ class PatrolEntryController extends Controller
             // Proves the ranger themself is the one ending this patrol —
             // mandatory here too, same as the start selfie ({@see startPatrol}).
             'selfie' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // Set when the app ended the patrol offline and is only now
+            // syncing — preserves the ranger's real end time instead of
+            // stamping the moment connectivity happened to return. Omitted
+            // (defaulting to now()) for a normal online end. See
+            // startPatrol()'s `started_at` for the same pattern.
+            'ended_at' => ['sometimes', 'date', 'before_or_equal:now'],
         ]);
 
         $storedSelfie = $this->photos->compressAndStore($validated['selfie'], 'patrol-end-selfies/'.$entry->pe_id);
@@ -1181,9 +1197,10 @@ class PatrolEntryController extends Controller
             }
 
             $totalDistance = $entry->vehicles()->sum('pev_distance');
+            $endedAt = isset($validated['ended_at']) ? Carbon::parse($validated['ended_at']) : now();
 
             $entry->update([
-                'pe_end_time' => now()->format('H:i:s'),
+                'pe_end_time' => $endedAt->format('H:i:s'),
                 'pe_end_latitude' => $validated['end_latitude'],
                 'pe_end_longitude' => $validated['end_longitude'],
                 'pe_area_patrolled' => $validated['area_patrolled'] ?? $entry->pe_area_patrolled,
@@ -1191,7 +1208,7 @@ class PatrolEntryController extends Controller
                 'pe_total_distance' => $totalDistance,
                 'pe_end_selfie_disk' => 'local',
                 'pe_end_selfie_path' => $storedSelfie['path'],
-                'pe_ended_at' => now(),
+                'pe_ended_at' => $endedAt,
                 'pe_status' => PatrollingEntries::STATUS_COMPLETED,
             ]);
 
