@@ -98,15 +98,31 @@ class User extends Authenticatable
     }
 
     /**
-     * The `app` half of this ranger's role's permissions, or `null` if
-     * unrestricted — appended to this model's JSON (see `$appends`) so the
-     * Flutter app can read what to show/hide without a second request.
+     * Every `Roles::APP_FEATURES` flag, resolved through [hasAppFeature] —
+     * `null` only when this ranger has no role at all (fully unrestricted).
+     * Appended to this model's JSON (see `$appends`) so the Flutter app can
+     * read what to show/hide without a second request.
+     *
+     * Deliberately resolved per-feature rather than returning the role's raw
+     * `ro_permissions['app']` array: a role saved before a given feature
+     * existed in `Roles::APP_FEATURES` (e.g. `comment`, added after several
+     * roles already had `patrolling`/`case`/`activity` configured) simply
+     * has no key for it, and [hasAppFeature] treats that missing key inside
+     * an otherwise-configured array as `false`. Sending the raw array let
+     * the app's own `AppFeatures.fromJson` — which defaults an absent key to
+     * `true` — disagree with that: it showed the comment write field for
+     * such a role, but every submit still 403'd against the real
+     * [hasAppFeature] check. Resolving every key here keeps the two in sync.
      */
     public function getPermissionsAttribute(): ?array
     {
-        $rolePermissions = $this->role?->ro_permissions;
+        if ($this->role === null) {
+            return null;
+        }
 
-        return $rolePermissions['app'] ?? null;
+        return collect(Roles::APP_FEATURES)
+            ->mapWithKeys(fn (string $feature) => [$feature => $this->hasAppFeature($feature)])
+            ->all();
     }
 
     /**

@@ -12,9 +12,13 @@ use Illuminate\Support\Carbon;
 class DashboardController extends Controller
 {
     /**
-     * Real-time "this month" counts for the field app's dashboard, scoped
-     * to the ranger's own patrol entries — patrollings they've logged, plus
-     * the cases and incidents ("activities") reported on those entries.
+     * Real-time "this month" counts for the field app's dashboard, scoped to
+     * every patrol entry in the ranger's assigned range(s) — not just the
+     * ones they personally led — plus the cases and incidents ("activities")
+     * reported on those entries. Matches how both the app's own Patrolling/
+     * Case history lists and the admin panel's dashboard already scope
+     * (range membership, not authorship): a range or field-staff ranger
+     * should see their whole range's activity here, same as everywhere else.
      * Each also carries a day-by-day count for the last 7 days for the
      * sparkline trend. Pass `range_id` (one of the ranger's assigned
      * ranges) to further scope every count to just that range — the
@@ -23,7 +27,6 @@ class DashboardController extends Controller
     public function stats(Request $request)
     {
         $user = $request->user();
-        $userId = $user->u_id;
 
         $validated = $request->validate([
             'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
@@ -35,12 +38,12 @@ class DashboardController extends Controller
             abort(403, 'You do not have access to this range.');
         }
 
+        $rangeIds = $rangeId !== null ? [$rangeId] : $user->ranges()->pluck('ranges.rn_id');
+
         $monthStart = Carbon::now()->startOfMonth();
         $monthEnd = Carbon::now()->endOfMonth();
 
-        $entriesQuery = PatrollingEntries::query()
-            ->where('pe_patrol_leader_id', $userId)
-            ->when($rangeId, fn ($query, $id) => $query->where('pe_range_id', $id));
+        $entriesQuery = PatrollingEntries::query()->whereIn('pe_range_id', $rangeIds);
 
         $patrolEntryIds = (clone $entriesQuery)->pluck('pe_id');
 
