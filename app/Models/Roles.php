@@ -43,7 +43,7 @@ class Roles extends Model
     public const ADMIN_SECTIONS = [
         'dashboard', 'roles', 'designations', 'patrolling_modes', 'patrol_types',
         'custom_fields', 'patrollings', 'cases', 'activities', 'ranges', 'beats',
-        'vehicles', 'staff', 'admins', 'users', 'user_details',
+        'vehicles', 'staff', 'admins', 'users', 'user_details', 'login_logs',
     ];
 
     /** Every app-side feature a role's permissions can name. */

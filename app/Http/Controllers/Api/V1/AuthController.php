@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
+use App\Models\LoginLog;
 use App\Models\User;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Http\Request;
@@ -14,12 +15,12 @@ class AuthController extends Controller
 {
     public function adminLogin(Request $request)
     {
-        return $this->attemptLogin($request, Admin::class, 'a_employee_id', now()->addHours(8));
+        return $this->attemptLogin($request, Admin::class, 'a_employee_id', LoginLog::TYPE_ADMIN, now()->addHours(8));
     }
 
     public function appLogin(Request $request)
     {
-        return $this->attemptLogin($request, User::class, 'u_employee_id');
+        return $this->attemptLogin($request, User::class, 'u_employee_id', LoginLog::TYPE_USER);
     }
 
     public function logout(Request $request)
@@ -33,7 +34,7 @@ class AuthController extends Controller
         ]);
     }
 
-    protected function attemptLogin(Request $request, string $modelClass, string $employeeIdColumn, ?\DateTimeInterface $expiresAt = null)
+    protected function attemptLogin(Request $request, string $modelClass, string $employeeIdColumn, string $accountType, ?\DateTimeInterface $expiresAt = null)
     {
         $request->validate([
             'employee_id' => ['required', 'string'],
@@ -68,10 +69,14 @@ class AuthController extends Controller
         }
 
         if (! $account || ! $this->verifyPassword($account, $password, $providedHash)) {
+            $this->recordLogin($request, $accountType, null, $employeeId, false);
+
             throw ValidationException::withMessages([
                 'employee_id' => ['Invalid employee ID or password.'],
             ]);
         }
+
+        $this->recordLogin($request, $accountType, $account->getKey(), $employeeId, true);
 
         $token = $account->createToken('api-token', ['*'], $expiresAt)->plainTextToken;
 
@@ -95,6 +100,19 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Login successful.',
             'data' => $data,
+        ]);
+    }
+
+    /** Writes one row to `login_logs` for every admin/app login attempt, successful or not. */
+    protected function recordLogin(Request $request, string $accountType, ?string $accountId, string $employeeId, bool $successful): void
+    {
+        LoginLog::create([
+            'll_account_type' => $accountType,
+            'll_account_id' => $accountId,
+            'll_employee_id' => $employeeId,
+            'll_successful' => $successful,
+            'll_ip_address' => $request->ip(),
+            'll_user_agent' => $request->userAgent(),
         ]);
     }
 

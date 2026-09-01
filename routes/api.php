@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\BeatController;
 use App\Http\Controllers\Api\V1\CaseEntryController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DesignationsController;
+use App\Http\Controllers\Api\V1\LoginLogController;
 use App\Http\Controllers\Api\V1\PatrolEntryController;
 use App\Http\Controllers\Api\V1\PatrollingModeController;
 use App\Http\Controllers\Api\V1\PatrolTypeController;
@@ -130,6 +131,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
 
     Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats'])
         ->middleware('admin.permission:dashboard');
+
+    Route::get('/login-logs', [LoginLogController::class, 'index'])
+        ->middleware(['admin.permission:login_logs', 'admin.master']);
 
     Route::middleware('admin.permission:custom_fields')->group(function () {
         Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
