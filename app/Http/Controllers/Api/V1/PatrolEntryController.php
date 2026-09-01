@@ -133,6 +133,10 @@ class PatrolEntryController extends Controller
      */
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => ['sometimes', 'string', 'max:100'],
+        ]);
+
         $rangeIds = $request->user()->ranges()->pluck('ranges.rn_id');
 
         $entries = PatrollingEntries::query()
@@ -140,6 +144,13 @@ class PatrolEntryController extends Controller
                 $query->where('pe_patrol_leader_id', $request->user()->u_id)
                     ->orWhereIn('pe_range_id', $rangeIds);
             })
+            // Search by the human-readable patrol id (e.g. "PTR-2026-042"),
+            // not the uuid pe_id — that's what the ranger actually sees and
+            // types, on the History list's search box.
+            ->when(
+                isset($validated['search']) && $validated['search'] !== '',
+                fn ($query) => $query->where('pe_patrol_id', 'ilike', '%'.$validated['search'].'%')
+            )
             ->with([
                 'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints',
                 'caseReports.media', 'incidents.media', 'notes', 'comments.admin', 'comments.user.details',

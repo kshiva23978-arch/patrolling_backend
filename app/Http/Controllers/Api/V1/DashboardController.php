@@ -12,17 +12,22 @@ use Illuminate\Support\Carbon;
 class DashboardController extends Controller
 {
     /**
-     * Real-time "this month" counts for the field app's dashboard, scoped to
-     * every patrol entry in the ranger's assigned range(s) — not just the
-     * ones they personally led — plus the cases and incidents ("activities")
-     * reported on those entries. Matches how both the app's own Patrolling/
-     * Case history lists and the admin panel's dashboard already scope
-     * (range membership, not authorship): a range or field-staff ranger
-     * should see their whole range's activity here, same as everywhere else.
-     * Each also carries a day-by-day count for the last 7 days for the
-     * sparkline trend. Pass `range_id` (one of the ranger's assigned
-     * ranges) to further scope every count to just that range — the
-     * dashboard's range selector, shown when the ranger has more than one.
+     * Real-time counts for the field app's dashboard — defaults to "this
+     * month" but accepts `from`/`to` to filter to any custom date range
+     * instead (the dashboard's date-range filter) — scoped to every patrol
+     * entry in the ranger's assigned range(s), not just the ones they
+     * personally led — plus the cases and incidents ("activities") reported
+     * on those entries. Matches how both the app's own Patrolling/Case
+     * history lists and the admin panel's dashboard already scope (range
+     * membership, not authorship): a range or field-staff ranger should see
+     * their whole range's activity here, same as everywhere else. Pass
+     * `range_id` (one of the ranger's assigned ranges) to further scope
+     * every count to just that range — the dashboard's range selector, shown
+     * when the ranger has more than one.
+     *
+     * The trend is always the last 7 calendar days regardless of `from`/`to`
+     * — it's a "recent activity" sparkline, not a breakdown of the selected
+     * totals window.
      */
     public function stats(Request $request)
     {
@@ -30,6 +35,8 @@ class DashboardController extends Controller
 
         $validated = $request->validate([
             'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date', 'after_or_equal:from'],
         ]);
 
         $rangeId = $validated['range_id'] ?? null;
@@ -40,44 +47,52 @@ class DashboardController extends Controller
 
         $rangeIds = $rangeId !== null ? [$rangeId] : $user->ranges()->pluck('ranges.rn_id');
 
-        $monthStart = Carbon::now()->startOfMonth();
-        $monthEnd = Carbon::now()->endOfMonth();
+        $periodStart = isset($validated['from'])
+            ? Carbon::parse($validated['from'])->startOfDay()
+            : Carbon::now()->startOfMonth();
+        $periodEnd = isset($validated['to'])
+            ? Carbon::parse($validated['to'])->endOfDay()
+            : Carbon::now()->endOfMonth();
 
         $entriesQuery = PatrollingEntries::query()->whereIn('pe_range_id', $rangeIds);
 
         $patrolEntryIds = (clone $entriesQuery)->pluck('pe_id');
 
-        $patrollingsThisMonth = (clone $entriesQuery)
-            ->whereBetween('pe_patrol_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+        $patrollingsInPeriod = (clone $entriesQuery)
+            ->whereBetween('pe_patrol_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->count();
 
-        $casesThisMonth = CaseEntry::query()
+        $casesInPeriod = CaseEntry::query()
             ->whereIn('ce_range_id', $rangeIds)
-            ->whereBetween('ce_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->whereBetween('ce_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->count();
 
-        $activitiesThisMonth = PatrolIncident::query()
+        $activitiesInPeriod = PatrolIncident::query()
             ->whereIn('pi_entry_id', $patrolEntryIds)
-            ->whereBetween('pi_reported_at', [$monthStart, $monthEnd])
+            ->whereBetween('pi_reported_at', [$periodStart, $periodEnd])
             ->count();
 
         return response()->json([
             'success' => true,
             'message' => 'Dashboard stats retrieved successfully.',
             'data' => [
+                'period' => [
+                    'from' => $periodStart->toDateString(),
+                    'to' => $periodEnd->toDateString(),
+                ],
                 'patrollings' => [
-                    'total' => $patrollingsThisMonth,
+                    'total' => $patrollingsInPeriod,
                     'trend' => $this->dailyTrend($entriesQuery, 'pe_patrol_date'),
                 ],
                 'cases' => [
-                    'total' => $casesThisMonth,
+                    'total' => $casesInPeriod,
                     'trend' => $this->dailyTrend(
                         CaseEntry::query()->whereIn('ce_range_id', $rangeIds),
                         'ce_date'
                     ),
                 ],
                 'activities' => [
-                    'total' => $activitiesThisMonth,
+                    'total' => $activitiesInPeriod,
                     'trend' => $this->dailyTrend(
                         PatrolIncident::query()->whereIn('pi_entry_id', $patrolEntryIds),
                         'pi_reported_at'
