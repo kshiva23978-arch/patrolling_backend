@@ -37,7 +37,7 @@ class LoginLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Login logs retrieved successfully.',
-            'data' => $logs->through(fn (LoginLog $log) => [
+            'data' => $logs->getCollection()->map(fn (LoginLog $log) => [
                 'id' => $log->ll_id,
                 'account_type' => $log->ll_account_type,
                 'account_id' => $log->ll_account_id,
@@ -46,7 +46,7 @@ class LoginLogController extends Controller
                 'ip_address' => $log->ll_ip_address,
                 'user_agent' => $log->ll_user_agent,
                 'created_at' => $log->ll_created_at,
-            ]),
+            ])->values(),
             'meta' => [
                 'current_page' => $logs->currentPage(),
                 'per_page' => $logs->perPage(),
