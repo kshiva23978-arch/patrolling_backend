@@ -425,7 +425,14 @@ class PatrolEntryController extends Controller
             'pe_start_selfie_disk' => 'local',
             'pe_start_selfie_path' => $storedSelfie['path'],
             'pe_status' => PatrollingEntries::STATUS_IN_PROGRESS,
-            'pe_started_at' => $validated['started_at'] ?? now(),
+            // `pe_started_at` is a naive `timestamp` column (no offset stored),
+            // read back everywhere as if it already holds `config('app.timezone')`
+            // wall-clock digits — so a client-submitted value (typically real UTC)
+            // must be converted to that zone before saving, or it gets written and
+            // later read back as if those UTC digits were already local.
+            'pe_started_at' => isset($validated['started_at'])
+                ? Carbon::parse($validated['started_at'])->setTimezone(config('app.timezone'))
+                : now(),
         ]);
 
         ReverseGeocodeLocation::dispatch(
@@ -782,7 +789,9 @@ class PatrolEntryController extends Controller
                 'pi_status' => $validated['status'] ?? 'open',
                 'pi_latitude' => $validated['latitude'] ?? null,
                 'pi_longitude' => $validated['longitude'] ?? null,
-                'pi_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
+                'pi_reported_at' => isset($validated['reported_at'])
+                    ? Carbon::parse($validated['reported_at'])->setTimezone(config('app.timezone'))
+                    : now(),
             ]);
 
             foreach ($validated['photos'] ?? [] as $photo) {
@@ -885,7 +894,9 @@ class PatrolEntryController extends Controller
                 'pcr_response_time' => $validated['response_time'] ?? null,
                 'pcr_latitude' => $validated['latitude'],
                 'pcr_longitude' => $validated['longitude'],
-                'pcr_reported_at' => isset($validated['reported_at']) ? Carbon::parse($validated['reported_at']) : now(),
+                'pcr_reported_at' => isset($validated['reported_at'])
+                    ? Carbon::parse($validated['reported_at'])->setTimezone(config('app.timezone'))
+                    : now(),
             ]);
 
             foreach ($validated['photos'] ?? [] as $photo) {
@@ -1208,7 +1219,12 @@ class PatrolEntryController extends Controller
             }
 
             $totalDistance = $entry->vehicles()->sum('pev_distance');
-            $endedAt = isset($validated['ended_at']) ? Carbon::parse($validated['ended_at']) : now();
+            // See `startPatrol`'s `pe_started_at` comment — same naive-column
+            // trap applies here, and `pe_end_time` derives from this same
+            // value, so getting the timezone wrong would skew both.
+            $endedAt = isset($validated['ended_at'])
+                ? Carbon::parse($validated['ended_at'])->setTimezone(config('app.timezone'))
+                : now();
 
             $entry->update([
                 'pe_end_time' => $endedAt->format('H:i:s'),
