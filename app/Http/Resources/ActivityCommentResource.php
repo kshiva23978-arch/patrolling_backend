@@ -28,7 +28,9 @@ class ActivityCommentResource extends JsonResource
         return [
             'id' => $this->atc_id,
             'text' => $this->atc_text,
-            'added_by' => $this->admin?->a_employee_id,
+            // See PatrolEntryCommentResource's identical field for why this
+            // resolves to $authorName rather than the admin relation alone.
+            'added_by' => $authorName,
             'author_name' => $authorName,
             'author_type' => $authorType,
             'is_mine' => $isMine,

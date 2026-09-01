@@ -32,8 +32,11 @@ class PatrolEntryCommentResource extends JsonResource
         return [
             'id' => $this->pec_id,
             'text' => $this->pec_text,
-            // Kept for the admin panel, which has always shown just this.
-            'added_by' => $this->admin?->a_employee_id,
+            // Kept for the admin panel, which has always shown just this —
+            // resolves to whichever of admin/ranger actually posted it (see
+            // $authorName above), not admin-only: a ranger-authored comment
+            // used to fall through to null here and show as "Unknown".
+            'added_by' => $authorName,
             'author_name' => $authorName,
             'author_type' => $authorType,
             'is_mine' => $isMine,
