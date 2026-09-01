@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\PatrolCaseReports;
+use App\Models\CaseEntry;
 use App\Models\PatrolIncident;
 use App\Models\PatrollingEntries;
 use Illuminate\Http\Request;
@@ -51,9 +51,9 @@ class DashboardController extends Controller
             ->whereBetween('pe_patrol_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->count();
 
-        $casesThisMonth = PatrolCaseReports::query()
-            ->whereIn('pcr_entry_id', $patrolEntryIds)
-            ->whereBetween('pcr_reported_at', [$monthStart, $monthEnd])
+        $casesThisMonth = CaseEntry::query()
+            ->whereIn('ce_range_id', $rangeIds)
+            ->whereBetween('ce_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->count();
 
         $activitiesThisMonth = PatrolIncident::query()
@@ -72,8 +72,8 @@ class DashboardController extends Controller
                 'cases' => [
                     'total' => $casesThisMonth,
                     'trend' => $this->dailyTrend(
-                        PatrolCaseReports::query()->whereIn('pcr_entry_id', $patrolEntryIds),
-                        'pcr_reported_at'
+                        CaseEntry::query()->whereIn('ce_range_id', $rangeIds),
+                        'ce_date'
                     ),
                 ],
                 'activities' => [

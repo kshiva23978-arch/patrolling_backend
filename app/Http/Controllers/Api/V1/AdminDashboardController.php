@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Concerns\ScopesToRanges;
 use App\Http\Controllers\Controller;
 use App\Models\Beats;
-use App\Models\PatrolCaseReports;
+use App\Models\CaseEntry;
 use App\Models\PatrolIncident;
 use App\Models\PatrollingEntries;
 use App\Models\Ranges;
@@ -65,10 +65,11 @@ class AdminDashboardController extends Controller
             ->where('pe_status', PatrollingEntries::STATUS_IN_PROGRESS)
             ->count();
 
-        $casesCount = PatrolCaseReports::query()
-            ->when($entryIdsInRange, fn ($q, $ids) => $q->whereIn('pcr_entry_id', $ids))
-            ->when($from, fn ($q, $date) => $q->whereDate('pcr_reported_at', '>=', $date))
-            ->when($to, fn ($q, $date) => $q->whereDate('pcr_reported_at', '<=', $date))
+        $casesCount = CaseEntry::query()
+            ->when($rangeId, fn ($q, $id) => $q->where('ce_range_id', $id))
+            ->when(! $rangeId && $accessibleRangeIds !== null, fn ($q) => $q->whereIn('ce_range_id', $accessibleRangeIds))
+            ->when($from, fn ($q, $date) => $q->whereDate('ce_date', '>=', $date))
+            ->when($to, fn ($q, $date) => $q->whereDate('ce_date', '<=', $date))
             ->count();
 
         $incidentsCount = PatrolIncident::query()
