@@ -615,7 +615,12 @@ class CaseEntryController extends Controller
             'cerp_longitude' => $validated['longitude'],
             'cerp_travel_mode' => $case->ce_current_travel_mode,
             'cerp_vehicle_id' => $case->ce_current_vehicle_id,
-            'cerp_recorded_at' => $validated['recorded_at'] ?? now(),
+            // See PatrolEntryController::addGpsPing()'s `prp_recorded_at` for
+            // why the client's (real UTC) value must be converted before
+            // saving into this naive-column timestamp.
+            'cerp_recorded_at' => isset($validated['recorded_at'])
+                ? Carbon::parse($validated['recorded_at'])->setTimezone(config('app.timezone'))
+                : now(),
         ]);
 
         return response()->json([

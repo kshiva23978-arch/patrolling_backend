@@ -712,7 +712,13 @@ class PatrolEntryController extends Controller
             'prp_longitude' => $validated['longitude'],
             'prp_travel_mode' => $entry->pe_current_travel_mode,
             'prp_vehicle_id' => $entry->pe_current_vehicle_id,
-            'prp_recorded_at' => $validated['recorded_at'] ?? now(),
+            // See `startPatrol`'s `pe_started_at` comment — same naive-column
+            // trap applies here: `prp_recorded_at` is read back everywhere as
+            // if it already holds `config('app.timezone')` wall-clock digits,
+            // so the client's (real UTC) value must be converted before saving.
+            'prp_recorded_at' => isset($validated['recorded_at'])
+                ? Carbon::parse($validated['recorded_at'])->setTimezone(config('app.timezone'))
+                : now(),
         ]);
 
         return response()->json([
