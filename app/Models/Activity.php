@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'act_id', 'act_name', 'act_description', 'act_latitude', 'act_longitude',
-    'act_address', 'act_conducted_by', 'act_created_by', 'act_created_via_token_id', 'act_status',
+    'act_address', 'act_conducted_by', 'act_category_id', 'act_created_by', 'act_created_via_token_id', 'act_status',
     'act_report', 'act_started_at', 'act_ended_at',
     'act_created_at', 'act_updated_at',
 ])]
@@ -53,6 +53,22 @@ class Activity extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'act_created_by', 'u_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ActivityCategories::class, 'act_category_id', 'ac_id');
+    }
+
+    public function reportGroupEntries(): HasMany
+    {
+        return $this->hasMany(ActivityReportGroupEntry::class, 'arge_activity_id', 'act_id')
+            ->orderBy('arge_created_at');
+    }
+
+    public function reportFieldValues(): HasMany
+    {
+        return $this->hasMany(ActivityReportFieldValue::class, 'arfv_activity_id', 'act_id');
     }
 
     public function participants(): HasMany

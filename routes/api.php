@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ActivityCategoriesController;
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\ActivityReportController;
+use App\Http\Controllers\Api\V1\AdminActivityCategoriesController;
 use App\Http\Controllers\Api\V1\AdminActivityController;
+use App\Http\Controllers\Api\V1\AdminActivityReportFieldsController;
 use App\Http\Controllers\Api\V1\AdminCaseEntryController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
@@ -51,15 +55,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:admins');
     Route::apiResource('users', UserController::class)->only(['index', 'show', 'update','store'])
         ->middleware('admin.permission:users');
-    // `index`/`show` stay open to anyone with the ordinary `designations`/
-    // `roles` view permission — Staff/User/Admin forms across the panel
-    // depend on those to populate their Designation/Role dropdowns
-    // regardless of who's filling the form out. *Managing* them
-    // (create/edit/delete) is a different, more sensitive capability —
-    // gated to Master Admin regardless of what a role's `ro_permissions`
-    // grants, so a Department Admin/Ranger role can never edit
-    // roles/designations even if someone ticks that permission box by
-    // mistake. See `EnsureMasterAdmin`'s doc comment.
+
     Route::apiResource('designations', DesignationsController::class)->only(['index', 'show'])
         ->middleware('admin.permission:designations');
     Route::apiResource('designations', DesignationsController::class)->only(['store', 'update', 'destroy'])
@@ -89,9 +85,6 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
     });
 
-    // Which ranges a Department Admin/Ranger admin account is scoped to —
-    // gated the same as the `admins` resource itself (only whoever can
-    // manage admin accounts can reassign what they're scoped to).
     Route::middleware('admin.permission:admins')->group(function () {
         Route::get('/admin-range-access', [AdminRangeAccessController::class, 'index']);
         Route::post('/admin-range-access', [AdminRangeAccessController::class, 'store']);
@@ -129,6 +122,22 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::delete('/activities/{activity}', [AdminActivityController::class, 'destroy']);
     });
 
+    Route::middleware('admin.permission:activity_categories')->group(function () {
+        Route::get('/activity-categories', [AdminActivityCategoriesController::class, 'index']);
+        Route::post('/activity-categories', [AdminActivityCategoriesController::class, 'store']);
+        Route::get('/activity-categories/{activityCategory}', [AdminActivityCategoriesController::class, 'show']);
+        Route::put('/activity-categories/{activityCategory}', [AdminActivityCategoriesController::class, 'update']);
+        Route::delete('/activity-categories/{activityCategory}', [AdminActivityCategoriesController::class, 'destroy']);
+
+        Route::get('/activity-report-fields', [AdminActivityReportFieldsController::class, 'index']);
+        Route::post('/activity-report-field-groups', [AdminActivityReportFieldsController::class, 'storeGroup']);
+        Route::put('/activity-report-field-groups/{group}', [AdminActivityReportFieldsController::class, 'updateGroup']);
+        Route::delete('/activity-report-field-groups/{group}', [AdminActivityReportFieldsController::class, 'destroyGroup']);
+        Route::post('/activity-report-fields', [AdminActivityReportFieldsController::class, 'storeField']);
+        Route::put('/activity-report-fields/{field}', [AdminActivityReportFieldsController::class, 'updateField']);
+        Route::delete('/activity-report-fields/{field}', [AdminActivityReportFieldsController::class, 'destroyField']);
+    });
+
     Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats'])
         ->middleware('admin.permission:dashboard');
 
@@ -141,6 +150,12 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::put('/custom-fields/{customField}', [RangeCustomFieldController::class, 'update']);
         Route::delete('/custom-fields/{customField}', [RangeCustomFieldController::class, 'destroy']);
     });
+
+
+    
+
+
+
 });
 
 /*
@@ -181,6 +196,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/patrol-entries/{entry}/comments', [PatrolEntryController::class, 'addComment']);
     Route::patch('/patrol-entries/{entry}/comments/{comment}', [PatrolEntryController::class, 'updateComment']);
 
+    Route::get('/activity-categories', [ActivityCategoriesController::class, 'forApp']);
+
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
     Route::get('/activities/media/{media}', [ActivityController::class, 'media'])->name('app.activity-media');
@@ -191,6 +208,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
     Route::post('/activities/{activity}/comments', [ActivityController::class, 'addComment']);
     Route::patch('/activities/{activity}/comments/{comment}', [ActivityController::class, 'updateComment']);
+
+    Route::get('/activities/{activity}/report', [ActivityReportController::class, 'show']);
+    Route::post('/activities/{activity}/report/entries', [ActivityReportController::class, 'storeEntry']);
+    Route::delete('/activities/{activity}/report/entries/{entry}', [ActivityReportController::class, 'destroyEntry']);
+    Route::patch('/activities/{activity}/report/values', [ActivityReportController::class, 'putValue']);
+    Route::post('/activities/{activity}/report/values/photo', [ActivityReportController::class, 'putPhotoValue']);
+    Route::get('/activities/report/photo/{value}', [ActivityReportController::class, 'photo'])->name('app.activity-report-photo');
 
     Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
 

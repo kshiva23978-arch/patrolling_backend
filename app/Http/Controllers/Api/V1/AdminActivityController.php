@@ -31,7 +31,7 @@ class AdminActivityController extends Controller
         $rangeIds = $this->accessibleRangeIds($request);
 
         $activities = Activity::query()
-            ->with(['createdBy.details', 'participants', 'media'])
+            ->with(['createdBy.details', 'category', 'participants', 'media'])
             ->when(
                 $validated['status'] ?? null,
                 fn ($query, $status) => $query->where('act_status', $status)
@@ -60,7 +60,7 @@ class AdminActivityController extends Controller
     {
         $this->assertActivityAccessible($request, $activity);
 
-        $activity->load(['createdBy.details', 'participants', 'media']);
+        $activity->load(['createdBy.details', 'category', 'participants', 'media']);
 
         return response()->json([
             'success' => true,

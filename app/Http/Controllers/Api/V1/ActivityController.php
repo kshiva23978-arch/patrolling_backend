@@ -10,12 +10,14 @@ use App\Models\Activity;
 use App\Models\ActivityComment;
 use App\Models\ActivityMedia;
 use App\Models\ActivityParticipant;
+use App\Models\ActivityReportField;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Standalone field activities (surveys, awareness drives, plantation days,
@@ -48,7 +50,7 @@ class ActivityController extends Controller
         $user = $request->user();
         $activities = Activity::query()
             ->when(! $user->hasAppFeature('comment'), fn ($query) => $query->where('act_created_by', $user->u_id))
-            ->with(['participants', 'media', 'comments.admin', 'comments.user.details'])
+            ->with(['category', 'participants', 'media', 'comments.admin', 'comments.user.details'])
             ->latest('act_created_at')
             ->paginate(15);
 
@@ -70,7 +72,7 @@ class ActivityController extends Controller
         if (! $this->canViewEntry($request, $activity)) {
             abort(403, 'You do not have access to this activity.');
         }
-        $activity->load(['participants', 'media', 'comments.admin', 'comments.user.details']);
+        $activity->load(['category', 'participants', 'media', 'comments.admin', 'comments.user.details']);
 
         return response()->json([
             'success' => true,
@@ -106,6 +108,7 @@ class ActivityController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:5000'],
             'conducted_by' => ['required', 'string', 'max:150'],
+            'category_id' => ['nullable', 'uuid', 'exists:activity_categories,ac_id'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
@@ -133,6 +136,7 @@ class ActivityController extends Controller
                 'act_name' => $validated['name'],
                 'act_description' => $validated['description'] ?? null,
                 'act_conducted_by' => $validated['conducted_by'],
+                'act_category_id' => $validated['category_id'] ?? null,
                 'act_created_by' => $user->u_id,
                 'act_created_via_token_id' => $tokenId,
                 'act_status' => Activity::STATUS_IN_PROGRESS,
@@ -184,7 +188,7 @@ class ActivityController extends Controller
 
     private function activityResponse(Activity $activity, string $message): JsonResponse
     {
-        $activity->loadMissing(['participants', 'media']);
+        $activity->loadMissing(['category', 'participants', 'media']);
 
         return response()->json([
             'success' => true,
@@ -392,7 +396,7 @@ class ActivityController extends Controller
         // reporting the already-completed activity back as success is
         // exactly as correct as the original request would have been.
         if ($activity->act_status === Activity::STATUS_COMPLETED) {
-            $activity->load(['participants', 'media']);
+            $activity->load(['category', 'participants', 'media']);
 
             return response()->json([
                 'success' => true,
@@ -407,13 +411,15 @@ class ActivityController extends Controller
             'report' => ['nullable', 'string', 'max:5000'],
         ]);
 
+        $this->assertReportFieldsComplete($activity);
+
         $activity->update([
             'act_report' => $validated['report'] ?? null,
             'act_status' => Activity::STATUS_COMPLETED,
             'act_ended_at' => now(),
         ]);
 
-        $activity->load(['participants', 'media']);
+        $activity->load(['category', 'participants', 'media']);
 
         return response()->json([
             'success' => true,
@@ -512,6 +518,56 @@ class ActivityController extends Controller
     {
         if ($activity->act_status !== Activity::STATUS_IN_PROGRESS) {
             abort(409, 'This activity has already ended.');
+        }
+    }
+
+    /**
+     * Every required active report field for this activity's category must
+     * already have an answer (submitted via {@see ActivityReportController}
+     * while the activity was in progress) before it can be ended — a flat
+     * field needs one value; a grouped field needs one per entry the ranger
+     * added of that group. A category with no report fields, or an activity
+     * with no category, has nothing to check.
+     */
+    private function assertReportFieldsComplete(Activity $activity): void
+    {
+        if ($activity->act_category_id === null) {
+            return;
+        }
+
+        $values = $activity->reportFieldValues()->get();
+        $hasAnswer = fn (string $fieldId, ?string $groupEntryId) => $values->contains(
+            fn ($v) => $v->arfv_field_id === $fieldId
+                && $v->arfv_group_entry_id === $groupEntryId
+                && ($v->arfv_value !== null || $v->arfv_file_path !== null)
+        );
+
+        $flatFields = ActivityReportField::where('arf_category_id', $activity->act_category_id)
+            ->whereNull('arf_group_id')
+            ->where('arf_is_active', true)
+            ->where('arf_is_required', true)
+            ->get();
+
+        foreach ($flatFields as $field) {
+            if (! $hasAnswer($field->arf_id, null)) {
+                throw ValidationException::withMessages([
+                    'report_fields' => "\"{$field->arf_field_name}\" is required.",
+                ]);
+            }
+        }
+
+        $entries = $activity->reportGroupEntries()->with('group.fields')->get();
+
+        foreach ($entries as $entry) {
+            $requiredFields = $entry->group->fields->where('arf_is_active', true)->where('arf_is_required', true);
+
+            foreach ($requiredFields as $field) {
+                if (! $hasAnswer($field->arf_id, $entry->arge_id)) {
+                    throw ValidationException::withMessages([
+                        'report_fields' => "\"{$field->arf_field_name}\" is required for every \"{$entry->group->arfg_name}\" entry.",
+                    ]);
+                }
+            }
         }
     }
 }

@@ -14,6 +14,11 @@ class AdminActivityResource extends JsonResource
             'name' => $this->act_name,
             'description' => $this->act_description,
             'conducted_by' => $this->act_conducted_by,
+            'category' => $this->whenLoaded('category', fn () => $this->category ? [
+                'id' => $this->category->ac_id,
+                'name' => $this->category->ac_name,
+                'has_report' => $this->category->ac_has_report,
+            ] : null),
             'status' => $this->act_status,
             'location' => [
                 'latitude' => $this->act_latitude,
