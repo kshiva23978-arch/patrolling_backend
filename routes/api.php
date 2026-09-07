@@ -211,6 +211,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/activities/media/{media}', [ActivityController::class, 'media'])->name('app.activity-media');
     Route::get('/activities/{activity}', [ActivityController::class, 'show']);
     Route::post('/activities/{activity}/end', [ActivityController::class, 'end']);
+    Route::patch('/activities/{activity}/report', [ActivityController::class, 'updateReport']);
     Route::post('/activities/{activity}/participants', [ActivityController::class, 'addParticipant']);
     Route::delete('/activities/{activity}/participants/{participant}', [ActivityController::class, 'removeParticipant']);
     Route::patch('/activities/{activity}/participant-count', [ActivityController::class, 'setParticipantCount']);

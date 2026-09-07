@@ -468,6 +468,30 @@ class ActivityController extends Controller
         ]);
     }
 
+    /**
+     * Adds or edits the report/conclusion — unlike {@see end}, this works
+     * both before and after the activity has ended, so a ranger who forgot
+     * to write one (or wants to correct it) isn't locked out once it's over.
+     */
+    public function updateReport(Request $request, Activity $activity)
+    {
+        $this->authorizeOwner($request, $activity);
+
+        $validated = $request->validate([
+            'report' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $activity->update(['act_report' => $validated['report'] ?? null]);
+
+        $activity->load(['category', 'destination', 'beach', 'participants', 'media']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Report saved successfully.',
+            'data' => new ActivityResource($activity),
+        ]);
+    }
+
     private function authorizeOwner(Request $request, Activity $activity): void
     {
         if ($activity->act_created_by !== $request->user()->u_id) {
