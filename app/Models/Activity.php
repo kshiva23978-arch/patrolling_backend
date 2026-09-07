@@ -11,7 +11,8 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'act_id', 'act_name', 'act_description', 'act_latitude', 'act_longitude',
-    'act_address', 'act_conducted_by', 'act_category_id', 'act_created_by', 'act_created_via_token_id', 'act_status',
+    'act_address', 'act_conducted_by', 'act_category_id', 'act_destination_id', 'act_beach_id',
+    'act_created_by', 'act_created_via_token_id', 'act_status',
     'act_report', 'act_started_at', 'act_ended_at',
     'act_created_at', 'act_updated_at',
 ])]
@@ -58,6 +59,16 @@ class Activity extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ActivityCategories::class, 'act_category_id', 'ac_id');
+    }
+
+    public function destination(): BelongsTo
+    {
+        return $this->belongsTo(Destination::class, 'act_destination_id', 'ds_id');
+    }
+
+    public function beach(): BelongsTo
+    {
+        return $this->belongsTo(Beach::class, 'act_beach_id', 'bc_id');
     }
 
     public function reportGroupEntries(): HasMany

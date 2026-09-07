@@ -11,6 +11,7 @@ use App\Models\ActivityComment;
 use App\Models\ActivityMedia;
 use App\Models\ActivityParticipant;
 use App\Models\ActivityReportField;
+use App\Models\Beach;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
 use Illuminate\Database\QueryException;
@@ -50,7 +51,7 @@ class ActivityController extends Controller
         $user = $request->user();
         $activities = Activity::query()
             ->when(! $user->hasAppFeature('comment'), fn ($query) => $query->where('act_created_by', $user->u_id))
-            ->with(['category', 'participants', 'media', 'comments.admin', 'comments.user.details'])
+            ->with(['category', 'destination', 'beach', 'participants', 'media', 'comments.admin', 'comments.user.details'])
             ->latest('act_created_at')
             ->paginate(15);
 
@@ -72,7 +73,7 @@ class ActivityController extends Controller
         if (! $this->canViewEntry($request, $activity)) {
             abort(403, 'You do not have access to this activity.');
         }
-        $activity->load(['category', 'participants', 'media', 'comments.admin', 'comments.user.details']);
+        $activity->load(['category', 'destination', 'beach', 'participants', 'media', 'comments.admin', 'comments.user.details']);
 
         return response()->json([
             'success' => true,
@@ -108,10 +109,23 @@ class ActivityController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:5000'],
             'conducted_by' => ['required', 'string', 'max:150'],
-            'category_id' => ['nullable', 'uuid', 'exists:activity_categories,ac_id'],
+            'category_id' => ['required', 'uuid', 'exists:activity_categories,ac_id'],
+            'destination_id' => ['required', 'uuid', 'exists:destinations,ds_id'],
+            'beach_id' => ['nullable', 'uuid', 'exists:beaches,bc_id'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
+
+        if (
+            ! empty($validated['beach_id'])
+            && ! Beach::where('bc_id', $validated['beach_id'])
+                ->where('bc_destination_id', $validated['destination_id'])
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'beach_id' => 'This beach does not belong to the selected destination.',
+            ]);
+        }
 
         if (! empty($validated['act_id'])) {
             $existing = $this->findActivityByClientId($validated['act_id'], $user->u_id);
@@ -136,7 +150,9 @@ class ActivityController extends Controller
                 'act_name' => $validated['name'],
                 'act_description' => $validated['description'] ?? null,
                 'act_conducted_by' => $validated['conducted_by'],
-                'act_category_id' => $validated['category_id'] ?? null,
+                'act_category_id' => $validated['category_id'],
+                'act_destination_id' => $validated['destination_id'],
+                'act_beach_id' => $validated['beach_id'] ?? null,
                 'act_created_by' => $user->u_id,
                 'act_created_via_token_id' => $tokenId,
                 'act_status' => Activity::STATUS_IN_PROGRESS,
@@ -188,7 +204,7 @@ class ActivityController extends Controller
 
     private function activityResponse(Activity $activity, string $message): JsonResponse
     {
-        $activity->loadMissing(['category', 'participants', 'media']);
+        $activity->loadMissing(['category', 'destination', 'beach', 'participants', 'media']);
 
         return response()->json([
             'success' => true,
@@ -396,7 +412,7 @@ class ActivityController extends Controller
         // reporting the already-completed activity back as success is
         // exactly as correct as the original request would have been.
         if ($activity->act_status === Activity::STATUS_COMPLETED) {
-            $activity->load(['category', 'participants', 'media']);
+            $activity->load(['category', 'destination', 'beach', 'participants', 'media']);
 
             return response()->json([
                 'success' => true,
@@ -419,7 +435,7 @@ class ActivityController extends Controller
             'act_ended_at' => now(),
         ]);
 
-        $activity->load(['category', 'participants', 'media']);
+        $activity->load(['category', 'destination', 'beach', 'participants', 'media']);
 
         return response()->json([
             'success' => true,

@@ -12,8 +12,10 @@ use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AdminRangeAccessController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BeachesController;
 use App\Http\Controllers\Api\V1\BeatController;
 use App\Http\Controllers\Api\V1\CaseEntryController;
+use App\Http\Controllers\Api\V1\DestinationsController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DesignationsController;
 use App\Http\Controllers\Api\V1\LoginLogController;
@@ -74,6 +76,10 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:patrol_types');
     Route::apiResource('beats', BeatController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:beats');
+    Route::apiResource('destinations', DestinationsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:destinations');
+    Route::apiResource('beaches', BeachesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:beaches');
     Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:vehicles');
     Route::apiResource('staff', StaffController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
@@ -197,6 +203,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/patrol-entries/{entry}/comments/{comment}', [PatrolEntryController::class, 'updateComment']);
 
     Route::get('/activity-categories', [ActivityCategoriesController::class, 'forApp']);
+    Route::get('/destinations', [DestinationsController::class, 'forApp']);
+    Route::get('/beaches', [BeachesController::class, 'forApp']);
 
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
