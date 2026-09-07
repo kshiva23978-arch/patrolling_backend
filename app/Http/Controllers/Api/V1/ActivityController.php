@@ -300,6 +300,30 @@ class ActivityController extends Controller
     }
 
     /**
+     * Sets (or clears, given `null`) the headcount directly — replaces the
+     * older name-each-participant flow above ({@see addParticipant}/{@see
+     * removeParticipant}, kept only for old data's sake) now that the app
+     * just asks for a number.
+     */
+    public function setParticipantCount(Request $request, Activity $activity)
+    {
+        $this->authorizeOwner($request, $activity);
+        $this->assertInProgress($activity);
+
+        $validated = $request->validate([
+            'count' => ['nullable', 'integer', 'min:0', 'max:100000'],
+        ]);
+
+        $activity->update(['act_participant_count' => $validated['count'] ?? null]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Participant count updated successfully.',
+            'data' => ['participant_count' => $activity->act_participant_count],
+        ]);
+    }
+
+    /**
      * Uploads one geo-tagged, optionally-captioned photo — the ranger's app
      * watermarks it client-side before this ever gets called; the server
      * just compresses and stores it (same as patrol incident/case photos).

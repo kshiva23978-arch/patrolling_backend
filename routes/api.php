@@ -213,6 +213,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/activities/{activity}/end', [ActivityController::class, 'end']);
     Route::post('/activities/{activity}/participants', [ActivityController::class, 'addParticipant']);
     Route::delete('/activities/{activity}/participants/{participant}', [ActivityController::class, 'removeParticipant']);
+    Route::patch('/activities/{activity}/participant-count', [ActivityController::class, 'setParticipantCount']);
     Route::post('/activities/{activity}/media', [ActivityController::class, 'addMedia']);
     Route::post('/activities/{activity}/comments', [ActivityController::class, 'addComment']);
     Route::patch('/activities/{activity}/comments/{comment}', [ActivityController::class, 'updateComment']);
