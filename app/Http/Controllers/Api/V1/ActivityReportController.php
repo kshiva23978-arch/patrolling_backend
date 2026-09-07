@@ -19,9 +19,12 @@ use Illuminate\Validation\ValidationException;
  * Field-app side of an activity's dynamic, category-defined report — the
  * admin-managed field/group definitions live under
  * {@see AdminActivityReportFieldsController}; this fills them in for one
- * specific activity while it's still in progress; see also
- * {@see ActivityController::end}, which requires every required field to be
- * answered before the activity can be closed out.
+ * specific activity, before or after it's ended (a ranger who skipped an
+ * optional field, or a whole repeatable group, isn't locked out once it's
+ * over — same reasoning as {@see ActivityController::updateReport}). See
+ * also {@see ActivityController::end}, which still requires every
+ * *required* field to be answered before the activity can be closed out in
+ * the first place.
  */
 class ActivityReportController extends Controller
 {
@@ -84,7 +87,6 @@ class ActivityReportController extends Controller
     public function storeEntry(Request $request, Activity $activity)
     {
         $this->authorizeOwner($request, $activity);
-        $this->assertInProgress($activity);
 
         $validated = $request->validate([
             'group_id' => ['required', 'uuid', 'exists:activity_report_field_groups,arfg_id'],
@@ -108,7 +110,6 @@ class ActivityReportController extends Controller
     public function destroyEntry(Request $request, Activity $activity, ActivityReportGroupEntry $entry)
     {
         $this->authorizeOwner($request, $activity);
-        $this->assertInProgress($activity);
 
         if ($entry->arge_activity_id !== $activity->act_id) {
             abort(404);
@@ -127,7 +128,6 @@ class ActivityReportController extends Controller
     public function putValue(Request $request, Activity $activity)
     {
         $this->authorizeOwner($request, $activity);
-        $this->assertInProgress($activity);
 
         $validated = $request->validate([
             'field_id' => ['required', 'uuid'],
@@ -171,7 +171,6 @@ class ActivityReportController extends Controller
     public function putPhotoValue(Request $request, Activity $activity)
     {
         $this->authorizeOwner($request, $activity);
-        $this->assertInProgress($activity);
 
         $validated = $request->validate([
             'field_id' => ['required', 'uuid'],
@@ -274,13 +273,6 @@ class ActivityReportController extends Controller
     {
         if ($activity->act_created_by !== $request->user()->u_id) {
             abort(403, 'You are not the owner of this activity.');
-        }
-    }
-
-    private function assertInProgress(Activity $activity): void
-    {
-        if ($activity->act_status !== Activity::STATUS_IN_PROGRESS) {
-            abort(409, 'This activity has already ended.');
         }
     }
 }
