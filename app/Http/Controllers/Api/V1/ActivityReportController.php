@@ -10,6 +10,7 @@ use App\Models\ActivityReportField;
 use App\Models\ActivityReportFieldGroup;
 use App\Models\ActivityReportFieldValue;
 use App\Models\ActivityReportGroupEntry;
+use App\Models\ActivityCategories;
 use App\Services\PatrolPhotoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +30,32 @@ use Illuminate\Validation\ValidationException;
 class ActivityReportController extends Controller
 {
     public function __construct(private readonly PatrolPhotoService $photos) {}
+
+    /** Report definition for caching before an offline activity reaches the server. */
+    public function categoryDefinition(ActivityCategories $category)
+    {
+        $groups = ActivityReportFieldGroup::where('arfg_category_id', $category->ac_id)
+            ->with(['fields' => fn ($q) => $q->where('arf_is_active', true)->orderBy('arf_sort_order')])
+            ->orderBy('arfg_sort_order')
+            ->get();
+
+        $fields = ActivityReportField::where('arf_category_id', $category->ac_id)
+            ->whereNull('arf_group_id')
+            ->where('arf_is_active', true)
+            ->orderBy('arf_sort_order')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Activity report definition retrieved successfully.',
+            'data' => [
+                'groups' => ActivityReportFieldGroupResource::collection($groups),
+                'fields' => ActivityReportFieldResource::collection($fields),
+                'entries' => [],
+                'values' => [],
+            ],
+        ]);
+    }
 
     /**
      * The activity's category's active groups/fields, plus whatever's

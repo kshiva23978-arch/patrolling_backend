@@ -224,6 +224,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/activities/{activity}/comments/{comment}', [ActivityController::class, 'updateComment']);
 
     Route::get('/activities/{activity}/report', [ActivityReportController::class, 'show']);
+    Route::get('/activity-categories/{category}/report-definition', [ActivityReportController::class, 'categoryDefinition']);
     Route::post('/activities/{activity}/report/entries', [ActivityReportController::class, 'storeEntry']);
     Route::delete('/activities/{activity}/report/entries/{entry}', [ActivityReportController::class, 'destroyEntry']);
     Route::patch('/activities/{activity}/report/values', [ActivityReportController::class, 'putValue']);
