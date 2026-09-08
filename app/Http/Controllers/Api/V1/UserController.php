@@ -73,20 +73,7 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        // `u_password_hash` arrives as the SHA-256 hex digest of the
-        // ranger's chosen password (see the app's `hashPassword` helper) —
-        // never the plaintext, so there's nothing here to check complexity
-        // (mixed case/symbols/etc.) against server-side; that has to be
-        // enforced client-side, before hashing. `min:8` is just a sanity
-        // floor against an empty/garbage value.
-        //
-        // `u_has_login` lets a Ranger add a staff record purely for
-        // record-keeping (named staff with no login of their own) — when
-        // `false`, employee id/password are ignored even if sent.
-        // Defaulted (rather than left absent) before validation so
-        // `required_if:u_has_login,true` below sees it either way — Laravel's
-        // `required_if` only matches a field actually present with that
-        // value, not an implied default.
+      
         $request->merge(['u_has_login' => $request->boolean('u_has_login', true)]);
 
         $validated = $request->validate([
@@ -97,12 +84,17 @@ class UserController extends Controller
             'u_designation_id' => ['nullable', 'string'],
             'u_status' => ['sometimes', 'boolean'],
             'range_id' => ['sometimes', 'uuid', 'exists:ranges,rn_id'],
+            'destination_id' => ['sometimes', 'uuid', 'exists:destinations,ds_id'],
         ]);
 
         $hasLogin = $validated['u_has_login'] ?? true;
 
         if (isset($validated['range_id'])) {
             $this->assertRangeAccessible($request, $validated['range_id']);
+        }
+
+        if (isset($validated['destination_id'])) {
+            $this->assetDestinationAccessible($request, $validated['destination_id']);
         }
 
         $user = User::create([
@@ -116,6 +108,10 @@ class UserController extends Controller
 
         if (isset($validated['range_id'])) {
             $user->ranges()->attach($validated['range_id']);
+        }
+
+        if(isset($validated['destination_id'])) {
+            $user->ranges()->attach($validated['destination_id']);
         }
 
         return response()->json([

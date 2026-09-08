@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
 #[Fillable(['ds_id', 'ds_name', 'ds_status'])]
@@ -32,6 +33,19 @@ class Destination extends Model
         static::creating(function (self $destination): void {
             $destination->ds_id ??= (string) Str::uuid();
         });
+    }
+
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            User::class,
+            'user_beach_access',
+            'uba_destination_id',
+            'uba_user_id',
+            'ds_id',
+            'u_id'
+        );
     }
 
     public function beaches(): HasMany

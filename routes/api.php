@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserDetailsController;
 use App\Http\Controllers\Api\V1\UserRangeAccessController;
+use App\Http\Controllers\Api\V1\UserDestinationAccessController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +90,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/user-range-access', [UserRangeAccessController::class, 'index']);
         Route::post('/user-range-access', [UserRangeAccessController::class, 'store']);
         Route::delete('/user-range-access/{userId}/{rangeId}', [UserRangeAccessController::class, 'destroy']);
+        Route::get('/user-destination-access', [UserDestinationAccessController::class, 'index']);
+        Route::post('/user-destination-access', [UserDestinationAccessController::class, 'store']);
+        Route::delete('/user-destination-access/{userId}/{destinationId}', [UserDestinationAccessController::class, 'destroy']);
     });
 
     Route::middleware('admin.permission:admins')->group(function () {

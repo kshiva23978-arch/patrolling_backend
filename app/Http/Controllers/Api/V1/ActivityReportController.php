@@ -90,11 +90,13 @@ class ActivityReportController extends Controller
 
         $validated = $request->validate([
             'group_id' => ['required', 'uuid', 'exists:activity_report_field_groups,arfg_id'],
+            'entry_id' => ['nullable', 'uuid'],
         ]);
 
         $group = $this->resolveGroupForActivity($activity, $validated['group_id']);
 
         $entry = ActivityReportGroupEntry::create([
+            'arge_id' => $validated['entry_id'] ?? null,
             'arge_activity_id' => $activity->act_id,
             'arge_group_id' => $group->arfg_id,
         ]);

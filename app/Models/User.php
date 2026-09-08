@@ -14,6 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Destination;
 
 #[Fillable(['u_id', 'u_employee_id', 'u_password_hash', 'u_role_id', 'u_designation_id', 'u_has_login', 'u_status', 'u_created_at', 'u_updated_at', 'u_last_login'])]
 #[Hidden(['u_password_hash', 'remember_token'])]
@@ -85,6 +86,19 @@ class User extends Authenticatable
             'rn_id'
         );
     }
+
+    public function destinations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Destination::class,
+            'user_beach_access',
+            'uba_user_id',
+            'uba_destination_id',
+            'u_id',
+            'ds_id'
+        );
+    }
+
 
     /**
      * `true` if this ranger is allowed to use the app-side [$feature]
