@@ -44,11 +44,11 @@ class Roles extends Model
         'dashboard', 'roles', 'designations', 'patrolling_modes', 'patrol_types',
         'custom_fields', 'patrollings', 'cases', 'activities', 'ranges', 'beats',
         'vehicles', 'staff', 'admins', 'users', 'user_details', 'login_logs', 'activity_categories',
-        'destinations', 'beaches',
+        'destinations', 'beaches', 'countries', 'waste_categories', 'beach_cleaning',
     ];
 
     /** Every app-side feature a role's permissions can name. */
-    public const APP_FEATURES = ['patrolling', 'case', 'activity', 'comment'];
+    public const APP_FEATURES = ['patrolling', 'case', 'activity', 'comment', 'beach_cleaning'];
 
     protected function casts(): array
     {

@@ -6,15 +6,18 @@ use App\Http\Controllers\Api\V1\ActivityReportController;
 use App\Http\Controllers\Api\V1\AdminActivityCategoriesController;
 use App\Http\Controllers\Api\V1\AdminActivityController;
 use App\Http\Controllers\Api\V1\AdminActivityReportFieldsController;
+use App\Http\Controllers\Api\V1\AdminBeachCleaningActivityController;
 use App\Http\Controllers\Api\V1\AdminCaseEntryController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AdminRangeAccessController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BeachCleaningActivityController;
 use App\Http\Controllers\Api\V1\BeachesController;
 use App\Http\Controllers\Api\V1\BeatController;
 use App\Http\Controllers\Api\V1\CaseEntryController;
+use App\Http\Controllers\Api\V1\CountryController;
 use App\Http\Controllers\Api\V1\DestinationsController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DesignationsController;
@@ -31,6 +34,7 @@ use App\Http\Controllers\Api\V1\UserDetailsController;
 use App\Http\Controllers\Api\V1\UserRangeAccessController;
 use App\Http\Controllers\Api\V1\UserDestinationAccessController;
 use App\Http\Controllers\Api\V1\VehicleController;
+use App\Http\Controllers\Api\V1\WasteCategoriesController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -73,6 +77,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:ranges');
     Route::apiResource('patrolling-modes', PatrollingModeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:patrolling_modes');
+    Route::apiResource('countries', CountryController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:countries');
     Route::apiResource('patrol-types', PatrolTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:patrol_types');
     Route::apiResource('beats', BeatController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
@@ -81,6 +87,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:destinations');
     Route::apiResource('beaches', BeachesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:beaches');
+    Route::apiResource('waste-categories', WasteCategoriesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
+        ->middleware('admin.permission:waste_categories');
     Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:vehicles');
     Route::apiResource('staff', StaffController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
@@ -130,6 +138,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/activities/{activity}', [AdminActivityController::class, 'show']);
         Route::get('/activity-media/{media}', [AdminActivityController::class, 'media']);
         Route::delete('/activities/{activity}', [AdminActivityController::class, 'destroy']);
+    });
+
+    Route::middleware('admin.permission:beach_cleaning')->group(function () {
+        Route::get('/beach-cleaning-activities', [AdminBeachCleaningActivityController::class, 'index']);
+        Route::get('/beach-cleaning-activities/{beachCleaningActivity}', [AdminBeachCleaningActivityController::class, 'show']);
+        Route::get('/beach-cleaning-media/{media}', [AdminBeachCleaningActivityController::class, 'media']);
+        Route::delete('/beach-cleaning-activities/{beachCleaningActivity}', [AdminBeachCleaningActivityController::class, 'destroy']);
     });
 
     Route::middleware('admin.permission:activity_categories')->group(function () {
@@ -209,6 +224,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::get('/activity-categories', [ActivityCategoriesController::class, 'forApp']);
     Route::get('/destinations', [DestinationsController::class, 'forApp']);
     Route::get('/beaches', [BeachesController::class, 'forApp']);
+    Route::get('/waste-categories', [WasteCategoriesController::class, 'forApp']);
+    Route::get('/countries', [CountryController::class, 'forApp']);
 
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::post('/activities', [ActivityController::class, 'store']);
@@ -230,6 +247,18 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::patch('/activities/{activity}/report/values', [ActivityReportController::class, 'putValue']);
     Route::post('/activities/{activity}/report/values/photo', [ActivityReportController::class, 'putPhotoValue']);
     Route::get('/activities/report/photo/{value}', [ActivityReportController::class, 'photo'])->name('app.activity-report-photo');
+
+    Route::get('/beach-cleaning-activities', [BeachCleaningActivityController::class, 'index']);
+    Route::post('/beach-cleaning-activities', [BeachCleaningActivityController::class, 'store']);
+    Route::get('/beach-cleaning-activities/media/{media}', [BeachCleaningActivityController::class, 'media'])->name('app.beach-cleaning-media');
+    Route::get('/beach-cleaning-activities/{beachCleaningActivity}', [BeachCleaningActivityController::class, 'show']);
+    Route::patch('/beach-cleaning-activities/{beachCleaningActivity}/details', [BeachCleaningActivityController::class, 'updateDetails']);
+    Route::patch('/beach-cleaning-activities/{beachCleaningActivity}/collection', [BeachCleaningActivityController::class, 'updateCollection']);
+    Route::patch('/beach-cleaning-activities/{beachCleaningActivity}/segregation-percent', [BeachCleaningActivityController::class, 'updateSegregationPercent']);
+    Route::post('/beach-cleaning-activities/{beachCleaningActivity}/segregations', [BeachCleaningActivityController::class, 'addSegregation']);
+    Route::delete('/beach-cleaning-activities/{beachCleaningActivity}/segregations/{segregation}', [BeachCleaningActivityController::class, 'removeSegregation']);
+    Route::post('/beach-cleaning-activities/{beachCleaningActivity}/media', [BeachCleaningActivityController::class, 'addMedia']);
+    Route::post('/beach-cleaning-activities/{beachCleaningActivity}/submit', [BeachCleaningActivityController::class, 'submit']);
 
     Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
 
