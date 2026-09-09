@@ -263,6 +263,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
     Route::post('/beach-cleaning-activities/{beachCleaningActivity}/media', [BeachCleaningActivityController::class, 'addMedia']);
     Route::delete('/beach-cleaning-activities/{beachCleaningActivity}/media/{media}', [BeachCleaningActivityController::class, 'removeMedia']);
     Route::post('/beach-cleaning-activities/{beachCleaningActivity}/submit', [BeachCleaningActivityController::class, 'submit']);
+    Route::patch('/beach-cleaning-activities/{beachCleaningActivity}/report', [BeachCleaningActivityController::class, 'updateReport']);
 
     Route::post('/patrol-entries/{entry}/gps', [PatrolEntryController::class, 'addGpsPing']);
 

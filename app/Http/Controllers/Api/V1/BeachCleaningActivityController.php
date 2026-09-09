@@ -375,6 +375,30 @@ class BeachCleaningActivityController extends Controller
         return $this->response($beachCleaningActivity, 'Beach cleaning activity submitted successfully.');
     }
 
+    /**
+     * Edits the closing report/handover-to after the drive has already been
+     * submitted — unlike {@see submit}, this deliberately skips
+     * {@see assertInProgress} so a ranger who wants to correct what they
+     * wrote isn't locked out once it's over (same reasoning as
+     * `ActivityController::updateReport`).
+     */
+    public function updateReport(Request $request, BeachCleaningActivity $beachCleaningActivity)
+    {
+        $this->authorizeOwner($request, $beachCleaningActivity);
+
+        $validated = $request->validate([
+            'report' => ['nullable', 'string', 'max:5000'],
+            'handover_to' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $beachCleaningActivity->update([
+            'bca_closing_report' => $validated['report'] ?? null,
+            'bca_handover_to' => $validated['handover_to'] ?? null,
+        ]);
+
+        return $this->response($beachCleaningActivity, 'Closing report updated successfully.');
+    }
+
     private function assertBeachBelongsToDestination(array $validated): void
     {
         if (empty($validated['beach_id'])) {
