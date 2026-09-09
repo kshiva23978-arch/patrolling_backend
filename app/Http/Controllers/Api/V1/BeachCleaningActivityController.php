@@ -96,8 +96,8 @@ class BeachCleaningActivityController extends Controller
 
         $tokenId = $user->currentAccessToken()?->id;
 
-        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
-            abort(409, 'You already have a patrol, case, activity, or beach cleaning drive that has not ended yet. End it before starting a new one.');
+        if ($this->unfinishedWork->hasInProgressBeachCleaning($user->u_id, $tokenId)) {
+            abort(409, 'You already have a beach cleaning drive that has not ended yet. End it before starting a new one.');
         }
 
         $activity = BeachCleaningActivity::create([
@@ -180,6 +180,10 @@ class BeachCleaningActivityController extends Controller
             'country_id' => ['required', 'uuid', 'exists:countries,co_id'],
             'waste_category_id' => ['required', 'uuid', 'exists:waste_categories,wc_id'],
             'quantity_kg' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
+            // The ranger's own weighing for this row — never derived from
+            // quantity_kg (a plain count, despite its column's name; see
+            // that migration's doc comment).
+            'weight_kg' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99'],
         ]);
 
         if (! empty($validated['bcs_id'])) {
@@ -197,6 +201,7 @@ class BeachCleaningActivityController extends Controller
             'bcs_country_id' => $validated['country_id'],
             'bcs_waste_category_id' => $validated['waste_category_id'],
             'bcs_quantity_kg' => $validated['quantity_kg'],
+            'bcs_weight_kg' => $validated['weight_kg'] ?? null,
         ]);
 
         return $this->response($beachCleaningActivity, 'Segregation row added successfully.');

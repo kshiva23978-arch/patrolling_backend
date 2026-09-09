@@ -56,6 +56,7 @@ class BeachCleaningActivityResource extends JsonResource
                     'country' => $s->country ? ['id' => $s->country->co_id, 'name' => $s->country->co_country_name] : null,
                     'waste_category' => $s->wasteCategory ? ['id' => $s->wasteCategory->wc_id, 'name' => $s->wasteCategory->wc_name] : null,
                     'quantity_kg' => $s->bcs_quantity_kg,
+                    'weight_kg' => $s->bcs_weight_kg,
                 ]),
             ),
             // Step 5's "auto calculated" summary — derived from the
@@ -71,20 +72,28 @@ class BeachCleaningActivityResource extends JsonResource
     {
         $byCategory = [];
         $byCountry = [];
+        // A ranger's own weighing per row, summed by category — separate
+        // from $byCategory (a plain count) and never derived from it; a row
+        // with no weight entered simply contributes nothing here.
+        $byCategoryWeight = [];
 
         foreach ($this->segregations as $segregation) {
             $categoryName = $segregation->wasteCategory?->wc_name ?? 'Uncategorized';
             $countryName = $segregation->country?->co_country_name ?? 'Unspecified';
             $qty = (float) $segregation->bcs_quantity_kg;
+            $weight = (float) ($segregation->bcs_weight_kg ?? 0);
 
             $byCategory[$categoryName] = ($byCategory[$categoryName] ?? 0) + $qty;
             $byCountry[$countryName] = ($byCountry[$countryName] ?? 0) + $qty;
+            $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + $weight;
         }
 
         return [
             'by_category' => collect($byCategory)->map(fn ($qty, $name) => ['name' => $name, 'quantity_kg' => round($qty, 2)])->values(),
             'by_country' => collect($byCountry)->map(fn ($qty, $name) => ['name' => $name, 'quantity_kg' => round($qty, 2)])->values(),
+            'by_category_weight' => collect($byCategoryWeight)->map(fn ($kg, $name) => ['name' => $name, 'quantity_kg' => round($kg, 2)])->values(),
             'segregated_total_kg' => round(array_sum($byCategory), 2),
+            'segregated_weight_total_kg' => round(array_sum($byCategoryWeight), 2),
         ];
     }
 
