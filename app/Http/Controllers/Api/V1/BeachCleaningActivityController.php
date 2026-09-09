@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BeachCleaningActivityResource;
 use App\Models\Beach;
 use App\Models\BeachCleaningActivity;
-use App\Models\BeachCleaningCategoryWeight;
 use App\Models\BeachCleaningMedia;
 use App\Models\BeachCleaningSegregation;
 use App\Services\PatrolPhotoService;
@@ -15,20 +14,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * A ranger's beach-cleaning drive, walked through in 6 steps by the app:
+ * A ranger's beach-cleaning drive, walked through in 5 steps by the app:
  * create (this controller's {@see store}, live `in_progress` immediately),
- * details, collection, country-wise collection (segregation — a plain
- * count), category-wise weight (independent of country), then
- * {@see submit}. See the `beach_cleaning_activities` migration's doc comment
- * for why this is a dedicated module rather than another `activities`
- * category.
+ * details, collection, country-wise collection (segregation — a quantity
+ * and, optionally, a weight per country+category row), then {@see submit}.
+ * See the `beach_cleaning_activities` migration's doc comment for why this
+ * is a dedicated module rather than another `activities` category.
  */
 class BeachCleaningActivityController extends Controller
 {
     private const WITH = [
         'destination', 'beach', 'media',
         'segregations.country', 'segregations.wasteCategory',
-        'categoryWeights.wasteCategory',
     ];
 
     public function __construct(
@@ -175,7 +172,11 @@ class BeachCleaningActivityController extends Controller
         return $this->response($beachCleaningActivity, 'Segregation percentage saved successfully.');
     }
 
-    /** Step 4 — "+ Add More": one country/waste-category/quantity row. */
+    /**
+     * Step 4 — "+ Add More": one country/waste-category/quantity row, plus
+     * an optional KG weight for that same row (independent of
+     * `quantity_kg` — a plain count — and never derived from it).
+     */
     public function addSegregation(Request $request, BeachCleaningActivity $beachCleaningActivity)
     {
         $this->authorizeOwner($request, $beachCleaningActivity);
@@ -186,6 +187,7 @@ class BeachCleaningActivityController extends Controller
             'country_id' => ['required', 'uuid', 'exists:countries,co_id'],
             'waste_category_id' => ['required', 'uuid', 'exists:waste_categories,wc_id'],
             'quantity_kg' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
+            'weight_kg' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99'],
         ]);
 
         if (! empty($validated['bcs_id'])) {
@@ -203,6 +205,7 @@ class BeachCleaningActivityController extends Controller
             'bcs_country_id' => $validated['country_id'],
             'bcs_waste_category_id' => $validated['waste_category_id'],
             'bcs_quantity_kg' => $validated['quantity_kg'],
+            'bcs_weight_kg' => $validated['weight_kg'] ?? null,
         ]);
 
         return $this->response($beachCleaningActivity, 'Segregation row added successfully.');
@@ -220,59 +223,6 @@ class BeachCleaningActivityController extends Controller
         $segregation->delete();
 
         return $this->response($beachCleaningActivity, 'Segregation row removed successfully.');
-    }
-
-    /**
-     * The category-wise weight page (after country-wise collection, before
-     * submit): one manually-weighed KG figure per waste category —
-     * independent of country, and never derived from the segregation
-     * counts above. A ranger adds at most one row per category; re-posting
-     * the same `waste_category_id` is rejected rather than silently
-     * creating a duplicate (see the client's own duplicate-prevention,
-     * which this backs up).
-     */
-    public function addCategoryWeight(Request $request, BeachCleaningActivity $beachCleaningActivity)
-    {
-        $this->authorizeOwner($request, $beachCleaningActivity);
-        $this->assertInProgress($beachCleaningActivity);
-
-        $validated = $request->validate([
-            'bcw_id' => ['sometimes', 'uuid'],
-            'waste_category_id' => ['required', 'uuid', 'exists:waste_categories,wc_id'],
-            'weight_kg' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
-        ]);
-
-        if (! empty($validated['bcw_id'])) {
-            $existing = BeachCleaningCategoryWeight::where('bcw_id', $validated['bcw_id'])
-                ->where('bcw_activity_id', $beachCleaningActivity->bca_id)
-                ->first();
-            if ($existing) {
-                return $this->response($beachCleaningActivity, 'Category weight added successfully.');
-            }
-        }
-
-        BeachCleaningCategoryWeight::create([
-            'bcw_id' => $validated['bcw_id'] ?? null,
-            'bcw_activity_id' => $beachCleaningActivity->bca_id,
-            'bcw_waste_category_id' => $validated['waste_category_id'],
-            'bcw_weight_kg' => $validated['weight_kg'],
-        ]);
-
-        return $this->response($beachCleaningActivity, 'Category weight added successfully.');
-    }
-
-    public function removeCategoryWeight(Request $request, BeachCleaningActivity $beachCleaningActivity, BeachCleaningCategoryWeight $categoryWeight)
-    {
-        $this->authorizeOwner($request, $beachCleaningActivity);
-        $this->assertInProgress($beachCleaningActivity);
-
-        if ($categoryWeight->bcw_activity_id !== $beachCleaningActivity->bca_id) {
-            abort(404);
-        }
-
-        $categoryWeight->delete();
-
-        return $this->response($beachCleaningActivity, 'Category weight removed successfully.');
     }
 
     /**

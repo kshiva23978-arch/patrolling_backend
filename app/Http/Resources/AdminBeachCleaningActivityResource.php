@@ -56,14 +56,7 @@ class AdminBeachCleaningActivityResource extends JsonResource
                     'country' => $s->country ? ['id' => $s->country->co_id, 'name' => $s->country->co_country_name] : null,
                     'waste_category' => $s->wasteCategory ? ['id' => $s->wasteCategory->wc_id, 'name' => $s->wasteCategory->wc_name] : null,
                     'quantity_kg' => $s->bcs_quantity_kg,
-                ]),
-            ),
-            'category_weights' => $this->whenLoaded(
-                'categoryWeights',
-                fn () => $this->categoryWeights->map(fn ($w) => [
-                    'id' => $w->bcw_id,
-                    'waste_category' => $w->wasteCategory ? ['id' => $w->wasteCategory->wc_id, 'name' => $w->wasteCategory->wc_name] : null,
-                    'weight_kg' => $w->bcw_weight_kg,
+                    'weight_kg' => $s->bcs_weight_kg,
                 ]),
             ),
             'report' => $this->whenLoaded('segregations', fn () => $this->buildReport()),
@@ -76,6 +69,7 @@ class AdminBeachCleaningActivityResource extends JsonResource
     {
         $byCategory = [];
         $byCountry = [];
+        $byCategoryWeight = [];
 
         foreach ($this->segregations as $segregation) {
             $categoryName = $segregation->wasteCategory?->wc_name ?? 'Uncategorized';
@@ -84,12 +78,10 @@ class AdminBeachCleaningActivityResource extends JsonResource
 
             $byCategory[$categoryName] = ($byCategory[$categoryName] ?? 0) + $qty;
             $byCountry[$countryName] = ($byCountry[$countryName] ?? 0) + $qty;
-        }
 
-        $byCategoryWeight = [];
-        foreach ($this->categoryWeights as $weight) {
-            $categoryName = $weight->wasteCategory?->wc_name ?? 'Uncategorized';
-            $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + (float) $weight->bcw_weight_kg;
+            if ($segregation->bcs_weight_kg !== null) {
+                $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + (float) $segregation->bcs_weight_kg;
+            }
         }
 
         return [

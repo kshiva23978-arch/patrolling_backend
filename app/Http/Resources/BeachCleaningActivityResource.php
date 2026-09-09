@@ -57,20 +57,12 @@ class BeachCleaningActivityResource extends JsonResource
                     'country' => $s->country ? ['id' => $s->country->co_id, 'name' => $s->country->co_country_name] : null,
                     'waste_category' => $s->wasteCategory ? ['id' => $s->wasteCategory->wc_id, 'name' => $s->wasteCategory->wc_name] : null,
                     'quantity_kg' => $s->bcs_quantity_kg,
+                    'weight_kg' => $s->bcs_weight_kg,
                 ]),
             ),
-            'category_weights' => $this->whenLoaded(
-                'categoryWeights',
-                fn () => $this->categoryWeights->map(fn ($w) => [
-                    'id' => $w->bcw_id,
-                    'waste_category' => $w->wasteCategory ? ['id' => $w->wasteCategory->wc_id, 'name' => $w->wasteCategory->wc_name] : null,
-                    'weight_kg' => $w->bcw_weight_kg,
-                ]),
-            ),
-            // Step 6's "auto calculated" summary — derived from the
-            // segregation/category-weight rows above rather than stored
-            // anywhere, so it's always in sync with whatever rows currently
-            // exist.
+            // Step 5's "auto calculated" summary — derived from the
+            // segregation rows above rather than stored anywhere, so it's
+            // always in sync with whatever rows currently exist.
             'report' => $this->whenLoaded('segregations', fn () => $this->buildReport()),
             'submitted_at' => $this->bca_submitted_at?->toISOString(),
             'created_at' => $this->bca_created_at?->toISOString(),
@@ -81,6 +73,9 @@ class BeachCleaningActivityResource extends JsonResource
     {
         $byCategory = [];
         $byCountry = [];
+        // Each row's own `bcs_weight_kg` — independent of $byCategory above
+        // (that's `bcs_quantity_kg`, a plain count), never derived from it.
+        $byCategoryWeight = [];
 
         foreach ($this->segregations as $segregation) {
             $categoryName = $segregation->wasteCategory?->wc_name ?? 'Uncategorized';
@@ -89,15 +84,10 @@ class BeachCleaningActivityResource extends JsonResource
 
             $byCategory[$categoryName] = ($byCategory[$categoryName] ?? 0) + $qty;
             $byCountry[$countryName] = ($byCountry[$countryName] ?? 0) + $qty;
-        }
 
-        // The category-wise weight page's own rows — entirely independent
-        // of $byCategory above (a plain count from country-wise collection),
-        // never derived from it.
-        $byCategoryWeight = [];
-        foreach ($this->categoryWeights as $weight) {
-            $categoryName = $weight->wasteCategory?->wc_name ?? 'Uncategorized';
-            $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + (float) $weight->bcw_weight_kg;
+            if ($segregation->bcs_weight_kg !== null) {
+                $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + (float) $segregation->bcs_weight_kg;
+            }
         }
 
         return [
