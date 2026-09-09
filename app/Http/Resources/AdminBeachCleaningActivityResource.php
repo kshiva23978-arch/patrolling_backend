@@ -12,6 +12,7 @@ class AdminBeachCleaningActivityResource extends JsonResource
         return [
             'id' => $this->bca_id,
             'activity_name' => $this->bca_activity_name,
+            'officer_name' => $this->bca_officer_name,
             'status' => $this->bca_status,
             'destination' => $this->whenLoaded('destination', fn () => $this->destination ? [
                 'id' => $this->destination->ds_id,
@@ -35,6 +36,7 @@ class AdminBeachCleaningActivityResource extends JsonResource
             'bags_collected' => $this->bca_bags_collected,
             'total_weight_kg' => $this->bca_total_weight_kg,
             'segregation_percent' => $this->bca_segregation_percent,
+            'closing_report' => $this->bca_closing_report,
             'media' => $this->whenLoaded(
                 'media',
                 fn () => $this->media->map(fn ($m) => [

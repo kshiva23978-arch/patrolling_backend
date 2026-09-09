@@ -78,6 +78,7 @@ class BeachCleaningActivityController extends Controller
             // as Activity::store; see there for the full reasoning.
             'bca_id' => ['sometimes', 'uuid'],
             'activity_name' => ['required', 'string', 'max:150'],
+            'officer_name' => ['required', 'string', 'max:150'],
             'destination_id' => ['required', 'uuid', 'exists:destinations,ds_id'],
             'beach_id' => ['nullable', 'uuid', 'exists:beaches,bc_id'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
@@ -102,6 +103,7 @@ class BeachCleaningActivityController extends Controller
         $activity = BeachCleaningActivity::create([
             'bca_id' => $validated['bca_id'] ?? null,
             'bca_activity_name' => $validated['activity_name'],
+            'bca_officer_name' => $validated['officer_name'],
             'bca_destination_id' => $validated['destination_id'],
             'bca_beach_id' => $validated['beach_id'] ?? null,
             'bca_latitude' => $validated['latitude'] ?? null,
@@ -264,6 +266,26 @@ class BeachCleaningActivityController extends Controller
     }
 
     /**
+     * Removes one photo the ranger captured in error — the file is deleted
+     * from disk first (it doesn't cascade automatically the way the DB row
+     * does), then the row itself.
+     */
+    public function removeMedia(Request $request, BeachCleaningActivity $beachCleaningActivity, BeachCleaningMedia $media)
+    {
+        $this->authorizeOwner($request, $beachCleaningActivity);
+        $this->assertInProgress($beachCleaningActivity);
+
+        if ($media->bcm_activity_id !== $beachCleaningActivity->bca_id) {
+            abort(404);
+        }
+
+        Storage::disk($media->bcm_disk)->delete($media->bcm_file_path);
+        $media->delete();
+
+        return $this->response($beachCleaningActivity, 'Photo removed successfully.');
+    }
+
+    /**
      * Step 5 — finalizes the activity. Idempotent, same reasoning as
      * Activity::end: a queued `submit` sync retried after its first attempt
      * actually succeeded should report the already-submitted activity back
@@ -279,7 +301,12 @@ class BeachCleaningActivityController extends Controller
 
         $this->assertInProgress($beachCleaningActivity);
 
+        $validated = $request->validate([
+            'report' => ['nullable', 'string', 'max:5000'],
+        ]);
+
         $beachCleaningActivity->update([
+            'bca_closing_report' => $validated['report'] ?? null,
             'bca_status' => BeachCleaningActivity::STATUS_SUBMITTED,
             'bca_submitted_at' => now(),
         ]);

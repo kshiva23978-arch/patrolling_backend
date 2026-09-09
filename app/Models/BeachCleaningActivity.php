@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 #[Fillable([
-    'bca_id', 'bca_activity_name', 'bca_destination_id', 'bca_beach_id',
+    'bca_id', 'bca_activity_name', 'bca_destination_id', 'bca_beach_id', 'bca_officer_name',
     'bca_latitude', 'bca_longitude', 'bca_created_by', 'bca_created_via_token_id',
     'bca_summary', 'bca_participant_count', 'bca_bags_collected', 'bca_total_weight_kg',
-    'bca_segregation_percent', 'bca_status', 'bca_submitted_at',
+    'bca_segregation_percent', 'bca_closing_report', 'bca_status', 'bca_submitted_at',
     'bca_created_at', 'bca_updated_at',
 ])]
 class BeachCleaningActivity extends Model
