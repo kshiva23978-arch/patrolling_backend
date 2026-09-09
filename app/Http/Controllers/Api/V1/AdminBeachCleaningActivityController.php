@@ -32,12 +32,16 @@ class AdminBeachCleaningActivityController extends Controller
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in([BeachCleaningActivity::STATUS_IN_PROGRESS, BeachCleaningActivity::STATUS_SUBMITTED])],
             'destination_id' => ['sometimes', 'uuid'],
+            'beach_id' => ['sometimes', 'uuid'],
+            'created_by' => ['sometimes', 'uuid'],
         ]);
 
         $activities = BeachCleaningActivity::query()
             ->with(self::WITH)
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('bca_status', $status))
             ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
+            ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
+            ->when($validated['created_by'] ?? null, fn ($q, $id) => $q->where('bca_created_by', $id))
             ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'bca_destination_id'))
             ->latest('bca_created_at')
             ->paginate(15);
@@ -52,6 +56,39 @@ class AdminBeachCleaningActivityController extends Controller
                 'total' => $activities->total(),
                 'last_page' => $activities->lastPage(),
             ],
+        ]);
+    }
+
+    /**
+     * Distinct rangers who have logged at least one beach cleaning drive
+     * visible to [$request]'s admin — populates the admin panel's "Ranger"
+     * filter dropdown without pulling in the full (range-scoped, name-less)
+     * `/admin/users` listing, which doesn't fit this destination-scoped
+     * screen. Placed as its own route ahead of `{beachCleaningActivity}` in
+     * routes/api.php so "rangers" isn't swallowed by that route's implicit
+     * model binding.
+     */
+    public function rangers(Request $request)
+    {
+        $rangers = BeachCleaningActivity::query()
+            ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'bca_destination_id'))
+            ->with('createdBy.details')
+            ->get()
+            ->pluck('createdBy')
+            ->filter()
+            ->unique('u_id')
+            ->map(fn ($u) => [
+                'id' => $u->u_id,
+                'employee_id' => $u->u_employee_id,
+                'name' => $u->details?->ud_fullname,
+            ])
+            ->sortBy(fn ($u) => $u['name'] ?? $u['employee_id'])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Rangers retrieved successfully.',
+            'data' => $rangers,
         ]);
     }
 
