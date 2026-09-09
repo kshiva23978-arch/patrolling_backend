@@ -137,10 +137,13 @@ class AdminBeachCleaningActivityController extends Controller
      * only ever recorded once per drive, not per country, so it has no
      * per-row breakdown the way the paper form's own "No. of Bags" column
      * implies; callers should show it as a single grand total, not a column.
-     * Also returns an `estimated_*` version of every figure — the paper
+     * Also returns a `remaining_*` version of every figure — the paper
      * form's own title says this is only ever a 10% *sample*, so those
-     * scale each recorded cell up by that drive's own sample rate to
-     * estimate the full 100% collection (see the loop below).
+     * estimate the other ~90% that was never individually sorted/counted,
+     * by scaling each recorded cell up by (that drive's own sample-rate
+     * multiplier minus one) — deliberately the *remaining* share on its
+     * own, not the full 100% (`matrix` + `remaining_matrix`), since a
+     * combined 100% figure isn't wanted here.
      */
     public function report(Request $request)
     {
@@ -166,10 +169,10 @@ class AdminBeachCleaningActivityController extends Controller
         $categories = WasteCategory::orderBy('wc_created_at')->pluck('wc_name')->all();
 
         $matrix = [];
-        $estimatedMatrix = [];
+        $remainingMatrix = [];
         foreach ($countries as $country) {
             $matrix[$country] = array_fill_keys($categories, 0.0);
-            $estimatedMatrix[$country] = array_fill_keys($categories, 0.0);
+            $remainingMatrix[$country] = array_fill_keys($categories, 0.0);
         }
 
         $totalBags = 0;
@@ -179,14 +182,16 @@ class AdminBeachCleaningActivityController extends Controller
             // This drive's own recorded sample rate (the paper form's "SAMPLE
             // OF 10% (LOT)") — its segregation rows only ever cover that
             // fraction of what was actually collected, so estimating the
-            // other 90%+ means scaling *this activity's* rows by its own
-            // multiplier before summing, not applying one flat 10x to an
+            // other ~90% means scaling *this activity's* rows by its own
+            // multiplier before summing, not applying one flat 9x to an
             // already-mixed total (a drive with an unusual percent would
             // otherwise throw the whole estimate off). Falls back to the
             // standard 10% when unset, same default the app itself locks
-            // step 4's "Segregation" field to.
+            // step 4's "Segregation" field to. `- 1` because this is the
+            // *remaining*, not-yet-sorted share on its own — the full 100%
+            // multiplier minus the 1x already recorded in `matrix`.
             $percent = (float) ($activity->bca_segregation_percent ?? 10.0);
-            $multiplier = $percent > 0 ? 100 / $percent : 10.0;
+            $remainingMultiplier = ($percent > 0 ? 100 / $percent : 10.0) - 1;
 
             foreach ($activity->segregations as $segregation) {
                 $countryName = $segregation->country?->co_country_name;
@@ -207,16 +212,16 @@ class AdminBeachCleaningActivityController extends Controller
 
                 $quantity = (float) $segregation->bcs_quantity_kg;
                 $matrix[$countryName][$categoryName] += $quantity;
-                $estimatedMatrix[$countryName][$categoryName] += $quantity * $multiplier;
+                $remainingMatrix[$countryName][$categoryName] += $quantity * $remainingMultiplier;
             }
         }
 
         $countryTotals = [];
         $categoryTotals = array_fill_keys($categories, 0.0);
         $grandTotal = 0.0;
-        $estimatedCountryTotals = [];
-        $estimatedCategoryTotals = array_fill_keys($categories, 0.0);
-        $estimatedGrandTotal = 0.0;
+        $remainingCountryTotals = [];
+        $remainingCategoryTotals = array_fill_keys($categories, 0.0);
+        $remainingGrandTotal = 0.0;
 
         foreach ($matrix as $country => $row) {
             $rowTotal = array_sum($row);
@@ -226,11 +231,11 @@ class AdminBeachCleaningActivityController extends Controller
                 $categoryTotals[$category] += $value;
             }
 
-            $estimatedRowTotal = array_sum($estimatedMatrix[$country]);
-            $estimatedCountryTotals[$country] = round($estimatedRowTotal, 2);
-            $estimatedGrandTotal += $estimatedRowTotal;
-            foreach ($estimatedMatrix[$country] as $category => $value) {
-                $estimatedCategoryTotals[$category] += $value;
+            $remainingRowTotal = array_sum($remainingMatrix[$country]);
+            $remainingCountryTotals[$country] = round($remainingRowTotal, 2);
+            $remainingGrandTotal += $remainingRowTotal;
+            foreach ($remainingMatrix[$country] as $category => $value) {
+                $remainingCategoryTotals[$category] += $value;
             }
         }
 
@@ -246,17 +251,16 @@ class AdminBeachCleaningActivityController extends Controller
                 'grand_total' => round($grandTotal, 2),
                 'total_bags' => $totalBags,
                 'activity_count' => $activities->count(),
-                // The estimated 100% collection — each recorded (sampled)
-                // cell above, scaled by its own drive's sample rate and
-                // re-summed. `estimated_grand_total` minus `grand_total` is
-                // the estimated *remaining* ~90% that was never individually
-                // sorted/counted. Bags aren't part of this: `total_bags` is
-                // an actual physical count of every bag collected, not a
+                // The estimated *remaining* ~90% never individually
+                // sorted/counted — each recorded (sampled) cell above,
+                // scaled by (its own drive's sample-rate multiplier minus
+                // one) and re-summed. Bags aren't part of this: `total_bags`
+                // is an actual physical count of every bag collected, not a
                 // sample, so it isn't scaled.
-                'estimated_matrix' => collect($estimatedMatrix)->map(fn ($row) => collect($row)->map(fn ($v) => round($v, 2)))->all(),
-                'estimated_country_totals' => $estimatedCountryTotals,
-                'estimated_category_totals' => collect($estimatedCategoryTotals)->map(fn ($v) => round($v, 2))->all(),
-                'estimated_grand_total' => round($estimatedGrandTotal, 2),
+                'remaining_matrix' => collect($remainingMatrix)->map(fn ($row) => collect($row)->map(fn ($v) => round($v, 2)))->all(),
+                'remaining_country_totals' => $remainingCountryTotals,
+                'remaining_category_totals' => collect($remainingCategoryTotals)->map(fn ($v) => round($v, 2))->all(),
+                'remaining_grand_total' => round($remainingGrandTotal, 2),
             ],
         ]);
     }
