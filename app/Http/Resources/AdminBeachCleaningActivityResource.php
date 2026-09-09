@@ -57,6 +57,14 @@ class AdminBeachCleaningActivityResource extends JsonResource
                     'quantity_kg' => $s->bcs_quantity_kg,
                 ]),
             ),
+            'category_weights' => $this->whenLoaded(
+                'categoryWeights',
+                fn () => $this->categoryWeights->map(fn ($w) => [
+                    'id' => $w->bcw_id,
+                    'waste_category' => $w->wasteCategory ? ['id' => $w->wasteCategory->wc_id, 'name' => $w->wasteCategory->wc_name] : null,
+                    'weight_kg' => $w->bcw_weight_kg,
+                ]),
+            ),
             'report' => $this->whenLoaded('segregations', fn () => $this->buildReport()),
             'submitted_at' => $this->bca_submitted_at?->toISOString(),
             'created_at' => $this->bca_created_at?->toISOString(),
@@ -77,10 +85,18 @@ class AdminBeachCleaningActivityResource extends JsonResource
             $byCountry[$countryName] = ($byCountry[$countryName] ?? 0) + $qty;
         }
 
+        $byCategoryWeight = [];
+        foreach ($this->categoryWeights as $weight) {
+            $categoryName = $weight->wasteCategory?->wc_name ?? 'Uncategorized';
+            $byCategoryWeight[$categoryName] = ($byCategoryWeight[$categoryName] ?? 0) + (float) $weight->bcw_weight_kg;
+        }
+
         return [
             'by_category' => collect($byCategory)->map(fn ($qty, $name) => ['name' => $name, 'quantity_kg' => round($qty, 2)])->values(),
             'by_country' => collect($byCountry)->map(fn ($qty, $name) => ['name' => $name, 'quantity_kg' => round($qty, 2)])->values(),
+            'by_category_weight' => collect($byCategoryWeight)->map(fn ($kg, $name) => ['name' => $name, 'quantity_kg' => round($kg, 2)])->values(),
             'segregated_total_kg' => round(array_sum($byCategory), 2),
+            'segregated_weight_total_kg' => round(array_sum($byCategoryWeight), 2),
         ];
     }
 }

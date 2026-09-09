@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'bcs_id', 'bcs_activity_id', 'bcs_country_id', 'bcs_waste_category_id',
-    'bcs_quantity_kg', 'bcs_weight_kg', 'bcs_created_at', 'bcs_updated_at',
+    'bcs_quantity_kg', 'bcs_created_at', 'bcs_updated_at',
 ])]
 class BeachCleaningSegregation extends Model
 {

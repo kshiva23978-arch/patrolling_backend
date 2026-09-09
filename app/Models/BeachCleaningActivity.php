@@ -74,4 +74,10 @@ class BeachCleaningActivity extends Model
         return $this->hasMany(BeachCleaningSegregation::class, 'bcs_activity_id', 'bca_id')
             ->orderBy('bcs_created_at');
     }
+
+    public function categoryWeights(): HasMany
+    {
+        return $this->hasMany(BeachCleaningCategoryWeight::class, 'bcw_activity_id', 'bca_id')
+            ->orderBy('bcw_created_at');
+    }
 }

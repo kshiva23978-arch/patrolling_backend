@@ -21,7 +21,11 @@ class AdminBeachCleaningActivityController extends Controller
 {
     use ScopesToDestinations;
 
-    private const WITH = ['destination', 'beach', 'createdBy.details', 'media', 'segregations.country', 'segregations.wasteCategory'];
+    private const WITH = [
+        'destination', 'beach', 'createdBy.details', 'media',
+        'segregations.country', 'segregations.wasteCategory',
+        'categoryWeights.wasteCategory',
+    ];
 
     public function index(Request $request)
     {
