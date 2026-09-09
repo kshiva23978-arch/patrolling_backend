@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\BeachCleaningActivity;
 use App\Models\CaseEntry;
 use App\Models\PatrolIncident;
 use App\Models\PatrollingEntries;
@@ -72,6 +73,15 @@ class DashboardController extends Controller
             ->whereBetween('pi_reported_at', [$periodStart, $periodEnd])
             ->count();
 
+        // Beach cleaning drives have no range of their own (a destination/
+        // beach pair instead) — scoped to this ranger personally, same as
+        // UnfinishedWorkChecker's "one active drive" rule.
+        $beachCleaningQuery = BeachCleaningActivity::query()->where('bca_created_by', $user->u_id);
+
+        $beachCleaningInPeriod = (clone $beachCleaningQuery)
+            ->whereBetween('bca_created_at', [$periodStart, $periodEnd])
+            ->count();
+
         return response()->json([
             'success' => true,
             'message' => 'Dashboard stats retrieved successfully.',
@@ -97,6 +107,10 @@ class DashboardController extends Controller
                         PatrolIncident::query()->whereIn('pi_entry_id', $patrolEntryIds),
                         'pi_reported_at'
                     ),
+                ],
+                'beach_cleaning' => [
+                    'total' => $beachCleaningInPeriod,
+                    'trend' => $this->dailyTrend($beachCleaningQuery, 'bca_created_at'),
                 ],
             ],
         ]);
