@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\AdminBeachCleaningActivityController;
 use App\Http\Controllers\Api\V1\AdminCaseEntryController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
+use App\Http\Controllers\Api\V1\AdminDestinationAccessController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
 use App\Http\Controllers\Api\V1\AdminRangeAccessController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -107,6 +108,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         Route::get('/admin-range-access', [AdminRangeAccessController::class, 'index']);
         Route::post('/admin-range-access', [AdminRangeAccessController::class, 'store']);
         Route::delete('/admin-range-access/{adminId}/{rangeId}', [AdminRangeAccessController::class, 'destroy']);
+        Route::get('/admin-destination-access', [AdminDestinationAccessController::class, 'index']);
+        Route::post('/admin-destination-access', [AdminDestinationAccessController::class, 'store']);
+        Route::delete('/admin-destination-access/{adminId}/{destinationId}', [AdminDestinationAccessController::class, 'destroy']);
     });
 
     Route::middleware('admin.permission:patrollings')->group(function () {

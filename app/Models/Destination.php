@@ -52,4 +52,16 @@ class Destination extends Model
     {
         return $this->hasMany(Beach::class, 'bc_destination_id', 'ds_id');
     }
+
+    public function admins(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Admin::class,
+            'admin_destination_access',
+            'ada_destination_id',
+            'ada_admin_id',
+            'ds_id',
+            'a_id'
+        );
+    }
 }

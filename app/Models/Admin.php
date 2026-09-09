@@ -74,6 +74,18 @@ class Admin extends Authenticatable
         );
     }
 
+    public function destinations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Destination::class,
+            'admin_destination_access',
+            'ada_admin_id',
+            'ada_destination_id',
+            'a_id',
+            'ds_id'
+        );
+    }
+
     /**
      * `true` if this admin is unrestricted — a `master_admin`-level role,
      * or no role at all (see `Roles::hasAdminPermission`'s doc comment for
@@ -111,6 +123,22 @@ class Admin extends Authenticatable
         $ids = $this->accessibleRangeIds();
 
         return $ids === null || in_array($rangeId, $ids, true);
+    }
+
+    /**
+     * The destination ids this admin's beach-cleaning data is scoped to, or
+     * `null` for unrestricted (sees every destination) — same
+     * `null`-vs-`[]` distinction as `accessibleRangeIds`. Only a
+     * `department_admin`/`ranger`-level role is scoped; a Master Admin (or
+     * role-less admin) always has every destination, by default.
+     */
+    public function accessibleDestinationIds(): ?array
+    {
+        if (! in_array($this->role?->ro_level, [Roles::LEVEL_DEPARTMENT_ADMIN, Roles::LEVEL_RANGER], true)) {
+            return null;
+        }
+
+        return $this->destinations()->pluck('ds_id')->all();
     }
 
     /**
