@@ -147,6 +147,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::middleware('admin.permission:beach_cleaning')->group(function () {
         Route::get('/beach-cleaning-activities', [AdminBeachCleaningActivityController::class, 'index']);
         Route::get('/beach-cleaning-activities/rangers', [AdminBeachCleaningActivityController::class, 'rangers']);
+        Route::get('/beach-cleaning-activities/weight-summary', [AdminBeachCleaningActivityController::class, 'weightSummary']);
+        Route::get('/beach-cleaning-activities/report', [AdminBeachCleaningActivityController::class, 'report']);
         Route::get('/beach-cleaning-activities/{beachCleaningActivity}', [AdminBeachCleaningActivityController::class, 'show']);
         Route::get('/beach-cleaning-media/{media}', [AdminBeachCleaningActivityController::class, 'media']);
         Route::delete('/beach-cleaning-activities/{beachCleaningActivity}', [AdminBeachCleaningActivityController::class, 'destroy']);
@@ -255,6 +257,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'app.user'])->prefix('v1/app'
 
     Route::get('/beach-cleaning-activities', [BeachCleaningActivityController::class, 'index']);
     Route::post('/beach-cleaning-activities', [BeachCleaningActivityController::class, 'store']);
+    Route::get('/beach-cleaning-activities/destinations', [DestinationsController::class, 'forBeachCleaning']);
     Route::get('/beach-cleaning-activities/media/{media}', [BeachCleaningActivityController::class, 'media'])->name('app.beach-cleaning-media');
     Route::get('/beach-cleaning-activities/{beachCleaningActivity}', [BeachCleaningActivityController::class, 'show']);
     Route::patch('/beach-cleaning-activities/{beachCleaningActivity}/details', [BeachCleaningActivityController::class, 'updateDetails']);

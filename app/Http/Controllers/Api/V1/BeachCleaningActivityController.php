@@ -8,6 +8,7 @@ use App\Models\Beach;
 use App\Models\BeachCleaningActivity;
 use App\Models\BeachCleaningMedia;
 use App\Models\BeachCleaningSegregation;
+use App\Models\User;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
 use Illuminate\Http\Request;
@@ -88,6 +89,7 @@ class BeachCleaningActivityController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
+        $this->assertDestinationAssigned($user, $validated['destination_id']);
         $this->assertBeachBelongsToDestination($validated);
 
         if (! empty($validated['bca_id'])) {
@@ -347,6 +349,20 @@ class BeachCleaningActivityController extends Controller
         ]);
 
         return $this->response($beachCleaningActivity, 'Closing report updated successfully.');
+    }
+
+    /**
+     * Backs up the app's own destination picker (see
+     * `DestinationsController::forBeachCleaning`), which only ever offers a
+     * ranger's assigned destinations — this rejects a request that names
+     * one outside that set regardless, e.g. from a stale cached list or a
+     * modified client.
+     */
+    private function assertDestinationAssigned(User $user, string $destinationId): void
+    {
+        if (! $user->destinations()->where('ds_id', $destinationId)->exists()) {
+            abort(403, 'You are not assigned to this destination.');
+        }
     }
 
     private function assertBeachBelongsToDestination(array $validated): void

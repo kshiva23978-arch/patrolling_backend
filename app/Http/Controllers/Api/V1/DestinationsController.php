@@ -39,6 +39,26 @@ class DestinationsController extends Controller
         ]);
     }
 
+    /**
+     * Active destinations this ranger is assigned to — scoped via
+     * `user_beach_access`/`User::destinations`, same as
+     * `RangeController::myRanges` scopes ranges. Only for the beach cleaning
+     * module's create-drive picker; unlike {@see forApp} (the standalone
+     * Activities module's own destination picker, deliberately left
+     * unscoped), a ranger has no "unrestricted" default here — no
+     * assignment means no destinations show up at all.
+     */
+    public function forBeachCleaning(Request $request)
+    {
+        $destinations = $request->user()->destinations()->where('ds_status', true)->orderBy('ds_name')->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Destinations retrieved successfully.',
+            'data' => DestinationResource::collection($destinations),
+        ]);
+    }
+
     public function show(Destination $destination)
     {
         return response()->json([
