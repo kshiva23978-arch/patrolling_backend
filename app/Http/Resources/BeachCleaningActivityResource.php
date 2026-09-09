@@ -32,6 +32,7 @@ class BeachCleaningActivityResource extends JsonResource
             'total_weight_kg' => $this->bca_total_weight_kg,
             'segregation_percent' => $this->bca_segregation_percent,
             'closing_report' => $this->bca_closing_report,
+            'handover_to' => $this->bca_handover_to,
             // See PatrolEntryResource::createdViaCurrentToken — same
             // reasoning: the app needs to tell "my own in-progress drive, on
             // this device" apart from "this ranger has one going on another

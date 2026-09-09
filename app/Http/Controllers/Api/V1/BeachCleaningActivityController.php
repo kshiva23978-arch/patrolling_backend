@@ -362,10 +362,12 @@ class BeachCleaningActivityController extends Controller
 
         $validated = $request->validate([
             'report' => ['nullable', 'string', 'max:5000'],
+            'handover_to' => ['nullable', 'string', 'max:150'],
         ]);
 
         $beachCleaningActivity->update([
             'bca_closing_report' => $validated['report'] ?? null,
+            'bca_handover_to' => $validated['handover_to'] ?? null,
             'bca_status' => BeachCleaningActivity::STATUS_SUBMITTED,
             'bca_submitted_at' => now(),
         ]);

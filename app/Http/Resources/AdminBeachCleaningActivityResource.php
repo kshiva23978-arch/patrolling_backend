@@ -37,6 +37,7 @@ class AdminBeachCleaningActivityResource extends JsonResource
             'total_weight_kg' => $this->bca_total_weight_kg,
             'segregation_percent' => $this->bca_segregation_percent,
             'closing_report' => $this->bca_closing_report,
+            'handover_to' => $this->bca_handover_to,
             'media' => $this->whenLoaded(
                 'media',
                 fn () => $this->media->map(fn ($m) => [
