@@ -27,6 +27,25 @@ class DestinationsController extends Controller
         ]);
     }
 
+    /**
+     * Every destination (active and inactive), unpaginated — the admin
+     * frontend's filter dropdowns (e.g. beach-cleaning-activities' list/
+     * report pages) need every row, not one page at a time; without this
+     * they'd otherwise walk {@see index}'s paginated response page by page
+     * (`apiFetchAll`), which is N sequential extra round-trips once there
+     * are more than one page's worth.
+     */
+    public function listAll()
+    {
+        $destinations = Destination::query()->orderBy('ds_name')->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Destinations retrieved successfully.',
+            'data' => DestinationResource::collection($destinations),
+        ]);
+    }
+
     /** Active destinations (Flutter field app dropdown when creating an activity). */
     public function forApp()
     {

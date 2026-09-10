@@ -29,6 +29,16 @@ class AdminBeachCleaningActivityController extends Controller
         'segregations.country', 'segregations.wasteCategory',
     ];
 
+    // What the admin list table (BeachCleaningActivitiesTable.tsx) actually
+    // renders — activity_name/status/bags/weight/created_at are plain
+    // columns needing no relation. Deliberately narrower than {@see WITH}:
+    // media/segregations (and the report `buildReport()` computes from
+    // segregations) cost real joins + payload for every one of the 15 rows
+    // on a page, purely for the detail page's ({@see show}) benefit — the
+    // Resource's `whenLoaded` calls simply omit those keys when unloaded,
+    // so this is a safe, response-shape-preserving trim.
+    private const INDEX_WITH = ['destination', 'beach', 'createdBy.details'];
+
     public function index(Request $request)
     {
         $validated = $request->validate([
@@ -39,7 +49,7 @@ class AdminBeachCleaningActivityController extends Controller
         ]);
 
         $activities = BeachCleaningActivity::query()
-            ->with(self::WITH)
+            ->with(self::INDEX_WITH)
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('bca_status', $status))
             ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
             ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
@@ -222,12 +232,18 @@ class AdminBeachCleaningActivityController extends Controller
             'beach_id' => ['sometimes', 'uuid'],
             'created_by' => ['sometimes', 'uuid'],
             'country_id' => ['sometimes', 'uuid'],
+            // Scopes the whole report down to one specific drive — the
+            // per-activity "Download Report" link on the detail page uses
+            // this instead of the other filters, which are for the
+            // multi-drive report page.
+            'activity_id' => ['sometimes', 'uuid'],
             'date_from' => ['sometimes', 'date'],
             'date_to' => ['sometimes', 'date'],
         ]);
 
         $activities = BeachCleaningActivity::query()
             ->with(['segregations.country', 'segregations.wasteCategory'])
+            ->when($validated['activity_id'] ?? null, fn ($q, $id) => $q->where('bca_id', $id))
             ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
             ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
             ->when($validated['created_by'] ?? null, fn ($q, $id) => $q->where('bca_created_by', $id))

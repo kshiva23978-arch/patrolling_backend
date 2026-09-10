@@ -40,6 +40,30 @@ class BeachesController extends Controller
         ]);
     }
 
+    /**
+     * Every beach (active and inactive, any destination), unpaginated —
+     * same reasoning as `DestinationsController::listAll`: the admin
+     * frontend's filter dropdowns need every row at once rather than
+     * walking {@see index}'s paginated response page by page.
+     */
+    public function listAll(Request $request)
+    {
+        $validated = $request->validate([
+            'destination_id' => ['sometimes', 'uuid', 'exists:destinations,ds_id'],
+        ]);
+
+        $beaches = Beach::query()
+            ->when(isset($validated['destination_id']), fn ($q) => $q->where('bc_destination_id', $validated['destination_id']))
+            ->orderBy('bc_name')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Beaches retrieved successfully.',
+            'data' => BeachResource::collection($beaches),
+        ]);
+    }
+
     /** Active beaches for the given destination (Flutter field app dropdown). */
     public function forApp(Request $request)
     {

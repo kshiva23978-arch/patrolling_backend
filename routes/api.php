@@ -84,6 +84,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
         ->middleware('admin.permission:patrol_types');
     Route::apiResource('beats', BeatController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:beats');
+    // Ahead of their resource routes below — otherwise `{destination}`/
+    // `{beach}` route-model-binding on the resource's `show` route would
+    // try (and fail) to resolve the literal segment "all" as an id.
+    Route::get('/destinations/all', [DestinationsController::class, 'listAll'])
+        ->middleware('admin.permission:destinations');
+    Route::get('/beaches/all', [BeachesController::class, 'listAll'])
+        ->middleware('admin.permission:beaches');
     Route::apiResource('destinations', DestinationsController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
         ->middleware('admin.permission:destinations');
     Route::apiResource('beaches', BeachesController::class)->only(['index', 'show', 'store', 'update', 'destroy'])
