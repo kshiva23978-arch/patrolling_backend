@@ -152,7 +152,7 @@ class AdminBeachCleaningActivityController extends Controller
         ]);
 
         $activities = BeachCleaningActivity::query()
-            ->with(['destination', 'segregations.wasteCategory'])
+            ->with(['destination', 'segregations.wasteCategory', 'segregations.country'])
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('bca_status', $status))
             ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
             ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
@@ -162,6 +162,7 @@ class AdminBeachCleaningActivityController extends Controller
 
         $byCategory = [];
         $byDestination = [];
+        $byCountry = [];
 
         foreach ($activities as $activity) {
             $destinationName = $activity->destination?->ds_name ?? 'Unspecified';
@@ -172,10 +173,12 @@ class AdminBeachCleaningActivityController extends Controller
                 }
 
                 $categoryName = $segregation->wasteCategory?->wc_name ?? 'Uncategorized';
+                $countryName = $segregation->country?->co_country_name ?? 'Unspecified';
                 $weight = (float) $segregation->bcs_weight_kg;
 
                 $byCategory[$categoryName] = ($byCategory[$categoryName] ?? 0) + $weight;
                 $byDestination[$destinationName] = ($byDestination[$destinationName] ?? 0) + $weight;
+                $byCountry[$countryName] = ($byCountry[$countryName] ?? 0) + $weight;
             }
         }
 
@@ -185,6 +188,7 @@ class AdminBeachCleaningActivityController extends Controller
             'data' => [
                 'by_category' => collect($byCategory)->map(fn ($kg, $name) => ['name' => $name, 'weight_kg' => round($kg, 2)])->values(),
                 'by_destination' => collect($byDestination)->map(fn ($kg, $name) => ['name' => $name, 'weight_kg' => round($kg, 2)])->values(),
+                'by_country' => collect($byCountry)->map(fn ($kg, $name) => ['name' => $name, 'weight_kg' => round($kg, 2)])->values(),
                 'total_weight_kg' => round(array_sum($byCategory), 2),
             ],
         ]);
@@ -217,6 +221,7 @@ class AdminBeachCleaningActivityController extends Controller
             'destination_id' => ['sometimes', 'uuid'],
             'beach_id' => ['sometimes', 'uuid'],
             'created_by' => ['sometimes', 'uuid'],
+            'country_id' => ['sometimes', 'uuid'],
             'date_from' => ['sometimes', 'date'],
             'date_to' => ['sometimes', 'date'],
         ]);
@@ -231,14 +236,31 @@ class AdminBeachCleaningActivityController extends Controller
             ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'bca_destination_id'))
             ->get();
 
-        $countries = Countries::orderBy('co_created_at')->pluck('co_country_name')->all();
+        // A `country_id` filter narrows the grid down to that one
+        // waste-origin country's row rather than filtering `$activities`
+        // itself — a drive can record segregation rows for several
+        // countries at once, so the meaningful filter is "only show this
+        // country's row", not "only show drives that mention it".
+        $countriesQuery = Countries::orderBy('co_created_at');
+        if (! empty($validated['country_id'])) {
+            $countriesQuery->where('co_id', $validated['country_id']);
+        }
+        $countries = $countriesQuery->pluck('co_country_name')->all();
         $categories = WasteCategory::orderBy('wc_created_at')->pluck('wc_name')->all();
 
         $matrix = [];
         $remainingMatrix = [];
+        // Parallel to $matrix/$remainingMatrix but summing `bcs_weight_kg`
+        // (the actual kilogram weight) instead of `bcs_quantity_kg` (the
+        // "Nos." count field — see the loop below's doc comment on that
+        // misleading name).
+        $weightMatrix = [];
+        $remainingWeightMatrix = [];
         foreach ($countries as $country) {
             $matrix[$country] = array_fill_keys($categories, 0.0);
             $remainingMatrix[$country] = array_fill_keys($categories, 0.0);
+            $weightMatrix[$country] = array_fill_keys($categories, 0.0);
+            $remainingWeightMatrix[$country] = array_fill_keys($categories, 0.0);
         }
 
         $totalBags = 0;
@@ -279,6 +301,10 @@ class AdminBeachCleaningActivityController extends Controller
                 $quantity = (float) $segregation->bcs_quantity_kg;
                 $matrix[$countryName][$categoryName] += $quantity;
                 $remainingMatrix[$countryName][$categoryName] += $quantity * $remainingMultiplier;
+
+                $weight = (float) ($segregation->bcs_weight_kg ?? 0.0);
+                $weightMatrix[$countryName][$categoryName] += $weight;
+                $remainingWeightMatrix[$countryName][$categoryName] += $weight * $remainingMultiplier;
             }
         }
 
@@ -288,6 +314,13 @@ class AdminBeachCleaningActivityController extends Controller
         $remainingCountryTotals = [];
         $remainingCategoryTotals = array_fill_keys($categories, 0.0);
         $remainingGrandTotal = 0.0;
+
+        $weightCountryTotals = [];
+        $weightCategoryTotals = array_fill_keys($categories, 0.0);
+        $weightGrandTotal = 0.0;
+        $remainingWeightCountryTotals = [];
+        $remainingWeightCategoryTotals = array_fill_keys($categories, 0.0);
+        $remainingWeightGrandTotal = 0.0;
 
         foreach ($matrix as $country => $row) {
             $rowTotal = array_sum($row);
@@ -302,6 +335,20 @@ class AdminBeachCleaningActivityController extends Controller
             $remainingGrandTotal += $remainingRowTotal;
             foreach ($remainingMatrix[$country] as $category => $value) {
                 $remainingCategoryTotals[$category] += $value;
+            }
+
+            $weightRowTotal = array_sum($weightMatrix[$country]);
+            $weightCountryTotals[$country] = round($weightRowTotal, 2);
+            $weightGrandTotal += $weightRowTotal;
+            foreach ($weightMatrix[$country] as $category => $value) {
+                $weightCategoryTotals[$category] += $value;
+            }
+
+            $remainingWeightRowTotal = array_sum($remainingWeightMatrix[$country]);
+            $remainingWeightCountryTotals[$country] = round($remainingWeightRowTotal, 2);
+            $remainingWeightGrandTotal += $remainingWeightRowTotal;
+            foreach ($remainingWeightMatrix[$country] as $category => $value) {
+                $remainingWeightCategoryTotals[$category] += $value;
             }
         }
 
@@ -327,6 +374,17 @@ class AdminBeachCleaningActivityController extends Controller
                 'remaining_country_totals' => $remainingCountryTotals,
                 'remaining_category_totals' => collect($remainingCategoryTotals)->map(fn ($v) => round($v, 2))->all(),
                 'remaining_grand_total' => round($remainingGrandTotal, 2),
+
+                // Same shapes as above, in kilograms (`bcs_weight_kg`)
+                // instead of item counts ("Nos.").
+                'weight_matrix' => collect($weightMatrix)->map(fn ($row) => collect($row)->map(fn ($v) => round($v, 2)))->all(),
+                'weight_country_totals' => $weightCountryTotals,
+                'weight_category_totals' => collect($weightCategoryTotals)->map(fn ($v) => round($v, 2))->all(),
+                'weight_grand_total' => round($weightGrandTotal, 2),
+                'remaining_weight_matrix' => collect($remainingWeightMatrix)->map(fn ($row) => collect($row)->map(fn ($v) => round($v, 2)))->all(),
+                'remaining_weight_country_totals' => $remainingWeightCountryTotals,
+                'remaining_weight_category_totals' => collect($remainingWeightCategoryTotals)->map(fn ($v) => round($v, 2))->all(),
+                'remaining_weight_grand_total' => round($remainingWeightGrandTotal, 2),
             ],
         ]);
     }
