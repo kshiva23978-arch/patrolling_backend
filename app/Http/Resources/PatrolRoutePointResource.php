@@ -19,6 +19,10 @@ class PatrolRoutePointResource extends JsonResource
             // the admin panel's map/distance math gets real numbers.
             'latitude' => (float) $this->prp_latitude,
             'longitude' => (float) $this->prp_longitude,
+            // 'gps' for a real fix, 'dr' for a dead-reckoned fallback point
+            // recorded while GPS was unavailable — see the app's
+            // `DeadReckoningService`.
+            'source' => $this->prp_source,
             'travel_mode' => $this->prp_travel_mode,
             // Not `whenLoaded` — the controller always eager-loads `vehicle`,
             // and a missing key (rather than null) here would break the

@@ -607,12 +607,17 @@ class CaseEntryController extends Controller
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'recorded_at' => ['nullable', 'date'],
+            // 'gps' (default) = a real fix; 'dr' = a dead-reckoned fallback
+            // point the app recorded while GPS was unavailable — see the
+            // Flutter app's `DeadReckoningService`.
+            'source' => ['nullable', 'in:gps,dr'],
         ]);
 
         $point = CaseEntryRoutePoint::create([
             'cerp_case_id' => $case->ce_id,
             'cerp_latitude' => $validated['latitude'],
             'cerp_longitude' => $validated['longitude'],
+            'cerp_source' => $validated['source'] ?? 'gps',
             'cerp_travel_mode' => $case->ce_current_travel_mode,
             'cerp_vehicle_id' => $case->ce_current_vehicle_id,
             // See PatrolEntryController::addGpsPing()'s `prp_recorded_at` for

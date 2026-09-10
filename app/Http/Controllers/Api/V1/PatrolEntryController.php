@@ -704,12 +704,17 @@ class PatrolEntryController extends Controller
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'recorded_at' => ['nullable', 'date'],
+            // 'gps' (default) = a real fix; 'dr' = a dead-reckoned fallback
+            // point the app recorded while GPS was unavailable — see the
+            // Flutter app's `DeadReckoningService`.
+            'source' => ['nullable', 'in:gps,dr'],
         ]);
 
         $point = PatrolRoutePoints::create([
             'prp_entry_id' => $entry->pe_id,
             'prp_latitude' => $validated['latitude'],
             'prp_longitude' => $validated['longitude'],
+            'prp_source' => $validated['source'] ?? 'gps',
             'prp_travel_mode' => $entry->pe_current_travel_mode,
             'prp_vehicle_id' => $entry->pe_current_vehicle_id,
             // See `startPatrol`'s `pe_started_at` comment — same naive-column
