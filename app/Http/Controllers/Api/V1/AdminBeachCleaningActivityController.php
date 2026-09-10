@@ -280,8 +280,15 @@ class AdminBeachCleaningActivityController extends Controller
         }
 
         $totalBags = 0;
+        // The drive's own actually-weighed total (`bca_total_weight_kg`,
+        // recorded once per drive at the collection step) — distinct from
+        // `weight_grand_total` below, which is only the *sampled* 10% of
+        // segregation rows summed up. This is the real overall figure, same
+        // "recorded once per drive, not per country" shape as `$totalBags`.
+        $totalWeightKg = 0.0;
         foreach ($activities as $activity) {
             $totalBags += (int) ($activity->bca_bags_collected ?? 0);
+            $totalWeightKg += (float) ($activity->bca_total_weight_kg ?? 0);
 
             // This drive's own recorded sample rate (the paper form's "SAMPLE
             // OF 10% (LOT)") — its segregation rows only ever cover that
@@ -379,6 +386,7 @@ class AdminBeachCleaningActivityController extends Controller
                 'category_totals' => collect($categoryTotals)->map(fn ($v) => round($v, 2))->all(),
                 'grand_total' => round($grandTotal, 2),
                 'total_bags' => $totalBags,
+                'total_weight_kg' => round($totalWeightKg, 2),
                 'activity_count' => $activities->count(),
                 // The estimated *remaining* ~90% never individually
                 // sorted/counted — each recorded (sampled) cell above,
