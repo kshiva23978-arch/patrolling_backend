@@ -147,6 +147,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
     Route::middleware('admin.permission:beach_cleaning')->group(function () {
         Route::get('/beach-cleaning-activities', [AdminBeachCleaningActivityController::class, 'index']);
         Route::get('/beach-cleaning-activities/rangers', [AdminBeachCleaningActivityController::class, 'rangers']);
+        Route::get('/beach-cleaning-activities/stats', [AdminBeachCleaningActivityController::class, 'stats']);
         Route::get('/beach-cleaning-activities/weight-summary', [AdminBeachCleaningActivityController::class, 'weightSummary']);
         Route::get('/beach-cleaning-activities/report', [AdminBeachCleaningActivityController::class, 'report']);
         Route::get('/beach-cleaning-activities/{beachCleaningActivity}', [AdminBeachCleaningActivityController::class, 'show']);

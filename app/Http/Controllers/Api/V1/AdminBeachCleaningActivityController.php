@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Concerns\ScopesToDestinations;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminBeachCleaningActivityResource;
+use App\Models\Beach;
 use App\Models\BeachCleaningActivity;
 use App\Models\BeachCleaningMedia;
 use App\Models\Countries;
@@ -57,6 +58,71 @@ class AdminBeachCleaningActivityController extends Controller
                 'total' => $activities->total(),
                 'last_page' => $activities->lastPage(),
             ],
+        ]);
+    }
+
+    /**
+     * Beach-wise collection totals — how much each beach has yielded across
+     * its drives, scoped by the same filters as {@see index}. Grouped in the
+     * database rather than in PHP since the drive count can grow large.
+     */
+    public function stats(Request $request)
+    {
+        $validated = $request->validate([
+            'status' => ['sometimes', Rule::in([BeachCleaningActivity::STATUS_IN_PROGRESS, BeachCleaningActivity::STATUS_SUBMITTED])],
+            'destination_id' => ['sometimes', 'uuid'],
+            'beach_id' => ['sometimes', 'uuid'],
+            'created_by' => ['sometimes', 'uuid'],
+        ]);
+
+        $rows = BeachCleaningActivity::query()
+            ->selectRaw('
+                bca_beach_id,
+                COUNT(*) as activities_count,
+                COALESCE(SUM(bca_participant_count), 0) as participant_count,
+                COALESCE(SUM(bca_bags_collected), 0) as bags_collected,
+                COALESCE(SUM(bca_total_weight_kg), 0) as total_weight_kg,
+                AVG(bca_segregation_percent) as avg_segregation_percent
+            ')
+            ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('bca_status', $status))
+            ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
+            ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
+            ->when($validated['created_by'] ?? null, fn ($q, $id) => $q->where('bca_created_by', $id))
+            ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'bca_destination_id'))
+            ->groupBy('bca_beach_id')
+            ->get();
+
+        $beaches = Beach::query()
+            ->whereIn('bc_id', $rows->pluck('bca_beach_id')->filter()->values())
+            ->with('destination')
+            ->get()
+            ->keyBy('bc_id');
+
+        $data = $rows
+            ->map(function ($row) use ($beaches) {
+                $beach = $row->bca_beach_id ? $beaches->get($row->bca_beach_id) : null;
+
+                return [
+                    'beach' => $beach ? ['id' => $beach->bc_id, 'name' => $beach->bc_name] : null,
+                    'destination' => $beach?->destination
+                        ? ['id' => $beach->destination->ds_id, 'name' => $beach->destination->ds_name]
+                        : null,
+                    'activities_count' => (int) $row->activities_count,
+                    'participant_count' => (int) $row->participant_count,
+                    'bags_collected' => (int) $row->bags_collected,
+                    'total_weight_kg' => round((float) $row->total_weight_kg, 2),
+                    'avg_segregation_percent' => $row->avg_segregation_percent !== null
+                        ? round((float) $row->avg_segregation_percent, 2)
+                        : null,
+                ];
+            })
+            ->sortByDesc('total_weight_kg')
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Beach cleaning stats retrieved successfully.',
+            'data' => $data,
         ]);
     }
 
