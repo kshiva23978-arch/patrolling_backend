@@ -19,6 +19,12 @@ class BeachesController extends Controller
         $beaches = Beach::query()
             ->when(isset($validated['destination_id']), fn ($q) => $q->where('bc_destination_id', $validated['destination_id']))
             ->latest('bc_created_at')
+            // Tiebreaker for rows sharing the same bc_created_at (bulk-seeded
+            // data often does) — without it, Postgres orders ties
+            // arbitrarily per query, so the same row can land on more than
+            // one page across separate paginated requests (see
+            // listAllBeaches's page-by-page fetch on the admin side).
+            ->orderBy('bc_id')
             ->paginate(15);
 
         return response()->json([
