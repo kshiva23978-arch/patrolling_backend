@@ -119,7 +119,7 @@ class ActivityController extends Controller
         if (
             ! empty($validated['beach_id'])
             && ! Beach::where('bc_id', $validated['beach_id'])
-                ->where('bc_destination_id', $validated['destination_id'])
+                ->forDestination($validated['destination_id'])
                 ->exists()
         ) {
             throw ValidationException::withMessages([

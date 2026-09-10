@@ -14,10 +14,15 @@ class BeachesController extends Controller
     {
         $validated = $request->validate([
             'destination_id' => ['sometimes', 'uuid', 'exists:destinations,ds_id'],
+            'search' => ['sometimes', 'string', 'max:100'],
         ]);
 
         $beaches = Beach::query()
-            ->when(isset($validated['destination_id']), fn ($q) => $q->where('bc_destination_id', $validated['destination_id']))
+            ->when(isset($validated['destination_id']), fn ($q) => $q->forDestination($validated['destination_id']))
+            ->when(
+                isset($validated['search']) && $validated['search'] !== '',
+                fn ($q) => $q->where('bc_name', 'ilike', '%'.$validated['search'].'%')
+            )
             ->latest('bc_created_at')
             // Tiebreaker for rows sharing the same bc_created_at (bulk-seeded
             // data often does) — without it, Postgres orders ties
@@ -53,7 +58,7 @@ class BeachesController extends Controller
         ]);
 
         $beaches = Beach::query()
-            ->when(isset($validated['destination_id']), fn ($q) => $q->where('bc_destination_id', $validated['destination_id']))
+            ->when(isset($validated['destination_id']), fn ($q) => $q->forDestination($validated['destination_id']))
             ->orderBy('bc_name')
             ->get();
 
@@ -71,7 +76,7 @@ class BeachesController extends Controller
             'destination_id' => ['required', 'uuid', 'exists:destinations,ds_id'],
         ]);
 
-        $beaches = Beach::where('bc_destination_id', $validated['destination_id'])
+        $beaches = Beach::forDestination($validated['destination_id'])
             ->where('bc_status', true)
             ->orderBy('bc_name')
             ->get();
@@ -96,12 +101,16 @@ class BeachesController extends Controller
     {
         $validated = $request->validate([
             'destination_id' => ['required', 'uuid', 'exists:destinations,ds_id'],
+            'shared_destination_id' => ['nullable', 'uuid', 'exists:destinations,ds_id', 'different:destination_id'],
             'name' => ['required', 'string', 'max:255'],
             'status' => ['sometimes', 'boolean'],
         ]);
 
-        $exists = Beach::where('bc_destination_id', $validated['destination_id'])
-            ->where('bc_name', trim($validated['name']))
+        $name = trim($validated['name']);
+        $destinationIds = array_filter([$validated['destination_id'], $validated['shared_destination_id'] ?? null]);
+
+        $exists = Beach::where('bc_name', $name)
+            ->where(fn ($q) => $q->whereIn('bc_destination_id', $destinationIds)->orWhereIn('bc_shared_destination_id', $destinationIds))
             ->exists();
 
         if ($exists) {
@@ -114,7 +123,8 @@ class BeachesController extends Controller
 
         $beach = Beach::create([
             'bc_destination_id' => $validated['destination_id'],
-            'bc_name' => trim($validated['name']),
+            'bc_shared_destination_id' => $validated['shared_destination_id'] ?? null,
+            'bc_name' => $name,
             'bc_status' => $validated['status'] ?? true,
         ]);
 
@@ -128,10 +138,48 @@ class BeachesController extends Controller
     public function update(Request $request, Beach $beach)
     {
         $validated = $request->validate([
+            'destination_id' => ['sometimes', 'uuid', 'exists:destinations,ds_id'],
+            'shared_destination_id' => ['sometimes', 'nullable', 'uuid', 'exists:destinations,ds_id', 'different:destination_id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'status' => ['sometimes', 'boolean'],
         ]);
 
+        $destinationId = $validated['destination_id'] ?? $beach->bc_destination_id;
+        $sharedDestinationId = array_key_exists('shared_destination_id', $validated)
+            ? $validated['shared_destination_id']
+            : $beach->bc_shared_destination_id;
+        // A destination_id-only change (shared_destination_id omitted) can leave the beach
+        // shared to its own new primary destination — reject that combination too.
+        if ($sharedDestinationId !== null && $sharedDestinationId === $destinationId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A beach cannot be shared with its own destination.',
+                'data' => null,
+            ], 422);
+        }
+
+        $name = trim($validated['name'] ?? $beach->bc_name);
+        $destinationIds = array_filter([$destinationId, $sharedDestinationId]);
+
+        $exists = Beach::where('bc_name', $name)
+            ->where('bc_id', '!=', $beach->bc_id)
+            ->where(fn ($q) => $q->whereIn('bc_destination_id', $destinationIds)->orWhereIn('bc_shared_destination_id', $destinationIds))
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A beach with this name already exists for the selected destination.',
+                'data' => null,
+            ], 422);
+        }
+
+        if (isset($validated['destination_id'])) {
+            $beach->bc_destination_id = $validated['destination_id'];
+        }
+        if (array_key_exists('shared_destination_id', $validated)) {
+            $beach->bc_shared_destination_id = $validated['shared_destination_id'];
+        }
         if (isset($validated['name'])) {
             $beach->bc_name = trim($validated['name']);
         }

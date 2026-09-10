@@ -371,7 +371,7 @@ class BeachCleaningActivityController extends Controller
             return;
         }
 
-        if (! Beach::where('bc_id', $validated['beach_id'])->where('bc_destination_id', $validated['destination_id'])->exists()) {
+        if (! Beach::where('bc_id', $validated['beach_id'])->forDestination($validated['destination_id'])->exists()) {
             abort(422, 'This beach does not belong to the selected destination.');
         }
     }

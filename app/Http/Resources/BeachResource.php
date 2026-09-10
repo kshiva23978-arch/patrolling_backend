@@ -12,6 +12,7 @@ class BeachResource extends JsonResource
         return [
             'id' => $this->bc_id,
             'destination_id' => $this->bc_destination_id,
+            'shared_destination_id' => $this->bc_shared_destination_id,
             'name' => $this->bc_name,
             'status' => $this->bc_status,
             'created_at' => $this->bc_created_at?->toISOString(),
