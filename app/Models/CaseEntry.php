@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
     'ce_start_address', 'ce_end_address', 'ce_start_selfie_disk', 'ce_start_selfie_path',
     'ce_end_selfie_disk', 'ce_end_selfie_path', 'ce_total_distance',
     'ce_staff_deployed_count', 'ce_staff_names', 'ce_incharge_staff', 'ce_leader_id',
-    'ce_created_via_token_id', 'ce_current_travel_mode', 'ce_current_vehicle_id',
+    'ce_created_via_token_id', 'ce_created_device_id', 'ce_current_travel_mode', 'ce_current_vehicle_id',
     'ce_incident_occurred', 'ce_case_filed', 'ce_report',
     'ce_status', 'ce_started_at', 'ce_ended_at', 'ce_created_at', 'ce_updated_at',
 ])]

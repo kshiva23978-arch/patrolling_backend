@@ -27,6 +27,7 @@ use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
+use App\Support\DeviceIdentity;
 use App\Support\RangeNumberSequence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -143,6 +144,12 @@ class PatrolEntryController extends Controller
                 $query->where('pe_patrol_leader_id', $request->user()->u_id)
                     ->orWhereIn('pe_range_id', $rangeIds);
             })
+            // An unfinished patrol is private to the phone that created it
+            // until that phone uploads the end — even the same ranger login
+            // on a second phone must not see it (see DeviceIdentity).
+            ->tap(fn ($query) => DeviceIdentity::scopeVisibleFrom(
+                $request, $query, 'pe_status', PatrollingEntries::STATUS_COMPLETED, 'pe_created_device_id', 'pe_created_via_token_id',
+            ))
             // Search by the human-readable patrol id (e.g. "PTR-2026-042"),
             // not the uuid pe_id — that's what the ranger actually sees and
             // types, on the History list's search box.
@@ -279,8 +286,9 @@ class PatrolEntryController extends Controller
         // at once from the same one. Only an in-progress patrol/case/
         // activity blocks — see UnfinishedWorkChecker.
         $tokenId = $user->currentAccessToken()?->id;
+        $deviceId = DeviceIdentity::fromRequest($request);
 
-        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
+        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId, $deviceId)) {
             abort(409, 'You already have a patrol, case, or activity that has not ended yet. End it before creating a new one.');
         }
 
@@ -314,7 +322,7 @@ class PatrolEntryController extends Controller
 
         $vehiclesInput = $validated['vehicles'] ?? [];
 
-        $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput, $tokenId) {
+        $entry = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput, $tokenId, $deviceId) {
             $entry = PatrollingEntries::create([
                 'pe_id' => $validated['pe_id'] ?? null,
                 'pe_patrol_id' => $this->generatePatrolId($range, $validated['pe_patrol_date']),
@@ -329,6 +337,7 @@ class PatrolEntryController extends Controller
                 'pe_staff_names' => $validated['staff_names'] ?? [],
                 'pe_patrol_leader_id' => $user->u_id,
                 'pe_created_via_token_id' => $tokenId,
+                'pe_created_device_id' => $deviceId,
                 'pe_gps_enabled' => false,
                 'pe_status' => PatrollingEntries::STATUS_PENDING,
             ]);
@@ -1342,6 +1351,23 @@ class PatrolEntryController extends Controller
         if ($entry->pe_patrol_leader_id !== $request->user()->u_id) {
             abort(403, 'You are not the patrol leader for this entry.');
         }
+        // Until it's ended and uploaded, only the phone that created it may
+        // touch it — the same login on another phone gets a 404, exactly as
+        // if it didn't exist yet (which, from that phone's view, it doesn't).
+        if (! $this->visibleFromThisDevice($request, $entry)) {
+            abort(404);
+        }
+    }
+
+    /** See {@see DeviceIdentity::mayViewUnfinished}. */
+    private function visibleFromThisDevice(Request $request, PatrollingEntries $entry): bool
+    {
+        return DeviceIdentity::mayViewUnfinished(
+            $request,
+            $entry->pe_status === PatrollingEntries::STATUS_COMPLETED,
+            $entry->pe_created_device_id,
+            $entry->pe_created_via_token_id,
+        );
     }
 
     /**
@@ -1355,6 +1381,10 @@ class PatrolEntryController extends Controller
      */
     private function canViewEntry(Request $request, PatrollingEntries $entry): bool
     {
+        if (! $this->visibleFromThisDevice($request, $entry)) {
+            return false;
+        }
+
         $user = $request->user();
         if ($entry->pe_patrol_leader_id === $user->u_id) {
             return true;

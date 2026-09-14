@@ -25,6 +25,7 @@ use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
+use App\Support\DeviceIdentity;
 use App\Support\RangeNumberSequence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -134,6 +135,11 @@ class CaseEntryController extends Controller
                 $query->where('ce_leader_id', $request->user()->u_id)
                     ->orWhereIn('ce_range_id', $rangeIds);
             })
+            // See PatrolEntryController::index — an unfinished case is
+            // private to the phone that created it until it's uploaded.
+            ->tap(fn ($query) => DeviceIdentity::scopeVisibleFrom(
+                $request, $query, 'ce_status', CaseEntry::STATUS_COMPLETED, 'ce_created_device_id', 'ce_created_via_token_id',
+            ))
             ->with([
                 'range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media',
                 'notes', 'comments.admin', 'comments.user.details',
@@ -244,8 +250,9 @@ class CaseEntryController extends Controller
         }
 
         $tokenId = $user->currentAccessToken()?->id;
+        $deviceId = DeviceIdentity::fromRequest($request);
 
-        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId)) {
+        if ($this->unfinishedWork->hasInProgressWork($user->u_id, $tokenId, $deviceId)) {
             abort(409, 'You already have a patrol, case, or activity that has not ended yet. End it before starting a new one.');
         }
 
@@ -271,7 +278,7 @@ class CaseEntryController extends Controller
 
         $vehiclesInput = $validated['vehicles'] ?? [];
 
-        $case = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput, $tokenId) {
+        $case = DB::transaction(function () use ($validated, $user, $range, $vehiclesInput, $tokenId, $deviceId) {
             $case = CaseEntry::create([
                 'ce_id' => $validated['ce_id'] ?? null,
                 'ce_case_number' => $this->generateCaseNumber($range),
@@ -285,6 +292,7 @@ class CaseEntryController extends Controller
                 'ce_staff_names' => $validated['staff_names'] ?? [],
                 'ce_leader_id' => $user->u_id,
                 'ce_created_via_token_id' => $tokenId,
+                'ce_created_device_id' => $deviceId,
                 'ce_status' => CaseEntry::STATUS_PENDING,
             ]);
 
@@ -1138,11 +1146,30 @@ class CaseEntryController extends Controller
         if ($case->ce_leader_id !== $request->user()->u_id) {
             abort(403, 'You are not the leader for this case.');
         }
+        // See PatrolEntryController::authorizeOwner's identical device rule.
+        if (! $this->visibleFromThisDevice($request, $case)) {
+            abort(404);
+        }
+    }
+
+    /** See {@see DeviceIdentity::mayViewUnfinished}. */
+    private function visibleFromThisDevice(Request $request, CaseEntry $case): bool
+    {
+        return DeviceIdentity::mayViewUnfinished(
+            $request,
+            $case->ce_status === CaseEntry::STATUS_COMPLETED,
+            $case->ce_created_device_id,
+            $case->ce_created_via_token_id,
+        );
     }
 
     /** See `PatrolEntryController::canViewEntry`'s identical doc comment. */
     private function canViewEntry(Request $request, CaseEntry $case): bool
     {
+        if (! $this->visibleFromThisDevice($request, $case)) {
+            return false;
+        }
+
         $user = $request->user();
         if ($case->ce_leader_id === $user->u_id) {
             return true;

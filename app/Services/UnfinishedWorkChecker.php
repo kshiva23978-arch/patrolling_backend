@@ -26,19 +26,45 @@ use App\Models\PatrollingEntries;
  */
 class UnfinishedWorkChecker
 {
-    public function hasInProgressWork(string $userId, ?int $tokenId): bool
+    public function hasInProgressWork(string $userId, ?int $tokenId, ?string $deviceId = null): bool
     {
+        // Patrols/cases are stamped with the creating phone's device id
+        // (see App\Support\DeviceIdentity), which survives re-login — so
+        // "this device's own unfinished work" matches by device when the
+        // app sends one, and only falls back to the login token otherwise
+        // (older app builds, or rows created before device ids existed).
         $hasPatrol = PatrollingEntries::where('pe_patrol_leader_id', $userId)
-            ->when($tokenId !== null, fn ($q) => $q->where('pe_created_via_token_id', $tokenId))
+            ->where(function ($q) use ($tokenId, $deviceId) {
+                $q->whereRaw('1 = 0');
+                if ($deviceId !== null) {
+                    $q->orWhere('pe_created_device_id', $deviceId);
+                }
+                if ($tokenId !== null) {
+                    $q->orWhere(fn ($legacy) => $legacy->whereNull('pe_created_device_id')->where('pe_created_via_token_id', $tokenId));
+                }
+                if ($deviceId === null && $tokenId === null) {
+                    $q->orWhereRaw('1 = 1');
+                }
+            })
             ->where('pe_status', PatrollingEntries::STATUS_IN_PROGRESS)
             ->exists();
-
         if ($hasPatrol) {
             return true;
         }
 
         $hasCase = CaseEntry::where('ce_leader_id', $userId)
-            ->when($tokenId !== null, fn ($q) => $q->where('ce_created_via_token_id', $tokenId))
+            ->where(function ($q) use ($tokenId, $deviceId) {
+                $q->whereRaw('1 = 0');
+                if ($deviceId !== null) {
+                    $q->orWhere('ce_created_device_id', $deviceId);
+                }
+                if ($tokenId !== null) {
+                    $q->orWhere(fn ($legacy) => $legacy->whereNull('ce_created_device_id')->where('ce_created_via_token_id', $tokenId));
+                }
+                if ($deviceId === null && $tokenId === null) {
+                    $q->orWhereRaw('1 = 1');
+                }
+            })
             ->where('ce_status', CaseEntry::STATUS_IN_PROGRESS)
             ->exists();
 
