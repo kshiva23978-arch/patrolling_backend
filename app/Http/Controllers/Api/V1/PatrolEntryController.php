@@ -11,7 +11,6 @@ use App\Http\Resources\PatrolNoteResource;
 use App\Http\Resources\PatrolRoutePointResource;
 use App\Jobs\ReverseGeocodeLocation;
 use App\Models\Beats;
-use App\Models\CaseNumberSequence;
 use App\Models\PatrolCaseMedia;
 use App\Models\PatrolCaseReports;
 use App\Models\PatrolEntryComment;
@@ -20,7 +19,6 @@ use App\Models\PatrolEntryCustomFieldValue;
 use App\Models\PatrolIncident;
 use App\Models\PatrolIncidentMedia;
 use App\Models\PatrolNote;
-use App\Models\PatrolNumberSequence;
 use App\Models\PatrolRoutePoints;
 use App\Models\PatrollingEntries;
 use App\Models\PatrolTypes;
@@ -29,6 +27,7 @@ use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
+use App\Support\RangeNumberSequence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -1437,38 +1436,33 @@ class PatrolEntryController extends Controller
     }
 
     /**
-     * Issues the next case number for the current year (e.g.
-     * `CASE-SR-2026-00042`) from the {@see CaseNumberSequence} master,
-     * locking the row so concurrent case reports never collide.
+     * Issues the next case-report number for this range in the current year
+     * (e.g. `CASE-SR-2026-00042`) — each range counts on its own, see
+     * {@see RangeNumberSequence}.
      */
     private function generateCaseNumber(Ranges $range): string
     {
         $rangeCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id));
         $year = (int) now()->year;
 
-        CaseNumberSequence::firstOrCreate(['cns_year' => $year], ['cns_last_number' => 0]);
+        $number = RangeNumberSequence::next(RangeNumberSequence::PATROL_CASE_REPORT, $year, $range->rn_id);
 
-        $sequence = CaseNumberSequence::where('cns_year', $year)->lockForUpdate()->first();
-        $sequence->increment('cns_last_number');
-
-        return sprintf('CASE-%s-%d-%05d', $rangeCode, $year, $sequence->cns_last_number);
+        return sprintf('CASE-%s-%d-%05d', $rangeCode, $year, $number);
     }
 
     /**
-     * Issues the next patrol id for the range's patrol-date year (e.g.
-     * `PAT-SR-2026-00087`) from the {@see PatrolNumberSequence} master,
-     * locking the row so concurrent patrol creations never collide.
+     * Issues the next patrol id for this range in the patrol-date year (e.g.
+     * `PAT-SR-2026-00087`) — each range counts on its own, so Wandoor being
+     * on its 4th patrol never affects what Chidiyatapu's next one is
+     * numbered. See {@see RangeNumberSequence}.
      */
     private function generatePatrolId(Ranges $range, string $date): string
     {
         $rangeCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id));
         $year = (int) Carbon::parse($date)->year;
 
-        PatrolNumberSequence::firstOrCreate(['pns_year' => $year], ['pns_last_number' => 0]);
+        $number = RangeNumberSequence::next(RangeNumberSequence::PATROL, $year, $range->rn_id);
 
-        $sequence = PatrolNumberSequence::where('pns_year', $year)->lockForUpdate()->first();
-        $sequence->increment('pns_last_number');
-
-        return sprintf('PAT-%s-%d-%05d', $rangeCode, $year, $sequence->pns_last_number);
+        return sprintf('PAT-%s-%d-%05d', $rangeCode, $year, $number);
     }
 }

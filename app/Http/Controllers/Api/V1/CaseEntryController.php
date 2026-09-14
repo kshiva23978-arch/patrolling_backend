@@ -19,13 +19,13 @@ use App\Models\CaseEntryFilingMedia;
 use App\Models\CaseEntryIncident;
 use App\Models\CaseEntryIncidentMedia;
 use App\Models\CaseEntryNote;
-use App\Models\CaseEntryNumberSequence;
 use App\Models\CaseEntryRoutePoint;
 use App\Models\CaseEntryVehicle;
 use App\Models\Ranges;
 use App\Models\Vehicles;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
+use App\Support\RangeNumberSequence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -1213,21 +1213,17 @@ class CaseEntryController extends Controller
     }
 
     /**
-     * Issues the next case number for the current year (e.g.
-     * `CASE-SR-2026-00042`) from {@see CaseEntryNumberSequence}, locking the
-     * row so concurrent submissions never collide — same pattern as
-     * {@see PatrolEntryController::generatePatrolId}.
+     * Issues the next case/filing number for this range in the current year
+     * (e.g. `CASE-SR-2026-00042`) — each range counts on its own, same as
+     * {@see PatrolEntryController::generatePatrolId}. See {@see RangeNumberSequence}.
      */
     private function generateCaseNumber(Ranges $range): string
     {
         $rangeCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $range->rn_range_id));
         $year = (int) now()->year;
 
-        CaseEntryNumberSequence::firstOrCreate(['cens_year' => $year], ['cens_last_number' => 0]);
+        $number = RangeNumberSequence::next(RangeNumberSequence::CASE_ENTRY, $year, $range->rn_id);
 
-        $sequence = CaseEntryNumberSequence::where('cens_year', $year)->lockForUpdate()->first();
-        $sequence->increment('cens_last_number');
-
-        return sprintf('CASE-%s-%d-%05d', $rangeCode, $year, $sequence->cens_last_number);
+        return sprintf('CASE-%s-%d-%05d', $rangeCode, $year, $number);
     }
 }
