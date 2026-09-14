@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\PatrolPhotoService;
 use App\Services\UnfinishedWorkChecker;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -36,9 +37,34 @@ class BeachCleaningActivityController extends Controller
 
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            // Matches the activity name, officer name, or beach name — what
+            // the ranger sees on the History list.
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            // Inclusive bounds on the day the drive was created — the History
+            // screen's date-range filter.
+            'from' => ['sometimes', 'nullable', 'date'],
+            'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],
+        ]);
+
         $user = $request->user();
         $activities = BeachCleaningActivity::query()
             ->where('bca_created_by', $user->u_id)
+            ->when(
+                isset($validated['search']) && $validated['search'] !== '',
+                fn ($query) => $query->where(fn ($q) => $q
+                    ->where('bca_activity_name', 'ilike', '%'.$validated['search'].'%')
+                    ->orWhere('bca_officer_name', 'ilike', '%'.$validated['search'].'%')
+                    ->orWhereHas('beach', fn ($b) => $b->where('bc_name', 'ilike', '%'.$validated['search'].'%')))
+            )
+            ->when(
+                ! empty($validated['from']),
+                fn ($query) => $query->whereDate('bca_created_at', '>=', Carbon::parse($validated['from'])->toDateString())
+            )
+            ->when(
+                ! empty($validated['to']),
+                fn ($query) => $query->whereDate('bca_created_at', '<=', Carbon::parse($validated['to'])->toDateString())
+            )
             ->with(self::WITH)
             ->latest('bca_created_at')
             ->paginate(15);

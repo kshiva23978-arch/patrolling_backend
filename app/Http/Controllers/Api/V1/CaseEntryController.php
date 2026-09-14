@@ -128,18 +128,48 @@ class CaseEntryController extends Controller
     /** See `PatrolEntryController::index`'s identical doc comment. */
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            // Matches the case number or case type — what the ranger sees on
+            // the History list and would type into its search box.
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            // Inclusive case-date bounds — the History screen's date-range filter.
+            'from' => ['sometimes', 'nullable', 'date'],
+            'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],
+            // See PatrolEntryController::index's identical `range_id`.
+            'range_id' => ['sometimes', 'nullable', 'uuid'],
+        ]);
+
         $rangeIds = $request->user()->ranges()->pluck('ranges.rn_id');
+        $rangeId = $validated['range_id'] ?? null;
+        if ($rangeId !== null && ! $rangeIds->contains($rangeId)) {
+            abort(403, 'You do not have access to this range.');
+        }
 
         $cases = CaseEntry::query()
             ->where(function ($query) use ($request, $rangeIds) {
                 $query->where('ce_leader_id', $request->user()->u_id)
                     ->orWhereIn('ce_range_id', $rangeIds);
             })
+            ->when($rangeId !== null, fn ($query) => $query->where('ce_range_id', $rangeId))
             // See PatrolEntryController::index — an unfinished case is
             // private to the phone that created it until it's uploaded.
             ->tap(fn ($query) => DeviceIdentity::scopeVisibleFrom(
                 $request, $query, 'ce_status', CaseEntry::STATUS_COMPLETED, 'ce_created_device_id', 'ce_created_via_token_id',
             ))
+            ->when(
+                isset($validated['search']) && $validated['search'] !== '',
+                fn ($query) => $query->where(fn ($q) => $q
+                    ->where('ce_case_number', 'ilike', '%'.$validated['search'].'%')
+                    ->orWhere('ce_case_type', 'ilike', '%'.$validated['search'].'%'))
+            )
+            ->when(
+                ! empty($validated['from']),
+                fn ($query) => $query->whereDate('ce_date', '>=', Carbon::parse($validated['from'])->toDateString())
+            )
+            ->when(
+                ! empty($validated['to']),
+                fn ($query) => $query->whereDate('ce_date', '<=', Carbon::parse($validated['to'])->toDateString())
+            )
             ->with([
                 'range', 'beat', 'modes', 'vehicles.vehicle', 'incidents.media', 'filings.media',
                 'notes', 'comments.admin', 'comments.user.details',

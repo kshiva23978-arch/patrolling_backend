@@ -134,16 +134,27 @@ class PatrolEntryController extends Controller
     public function index(Request $request)
     {
         $validated = $request->validate([
-            'search' => ['sometimes', 'string', 'max:100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            // Inclusive patrol-date bounds — the History screen's date-range filter.
+            'from' => ['sometimes', 'nullable', 'date'],
+            'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],
+            // Narrows to one of the ranger's assigned ranges — the History
+            // screen's range dropdown (only offered when they have several).
+            'range_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
 
         $rangeIds = $request->user()->ranges()->pluck('ranges.rn_id');
+        $rangeId = $validated['range_id'] ?? null;
+        if ($rangeId !== null && ! $rangeIds->contains($rangeId)) {
+            abort(403, 'You do not have access to this range.');
+        }
 
         $entries = PatrollingEntries::query()
             ->where(function ($query) use ($request, $rangeIds) {
                 $query->where('pe_patrol_leader_id', $request->user()->u_id)
                     ->orWhereIn('pe_range_id', $rangeIds);
             })
+            ->when($rangeId !== null, fn ($query) => $query->where('pe_range_id', $rangeId))
             // An unfinished patrol is private to the phone that created it
             // until that phone uploads the end — even the same ranger login
             // on a second phone must not see it (see DeviceIdentity).
@@ -156,6 +167,14 @@ class PatrolEntryController extends Controller
             ->when(
                 isset($validated['search']) && $validated['search'] !== '',
                 fn ($query) => $query->where('pe_patrol_id', 'ilike', '%'.$validated['search'].'%')
+            )
+            ->when(
+                ! empty($validated['from']),
+                fn ($query) => $query->whereDate('pe_patrol_date', '>=', Carbon::parse($validated['from'])->toDateString())
+            )
+            ->when(
+                ! empty($validated['to']),
+                fn ($query) => $query->whereDate('pe_patrol_date', '<=', Carbon::parse($validated['to'])->toDateString())
             )
             ->with([
                 'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle', 'routePoints',
