@@ -356,21 +356,32 @@ class AdminPatrolEntryController extends Controller
             ->get();
 
         $totalDistanceKm = 0.0;
+        $totalDurationMinutes = 0;
         $caseCount = 0;
         $incidentCount = 0;
         $byRange = [];
         $distances = [];
+        $durations = [];
         foreach ($entries as $entry) {
             $distance = (float) ($entry->distanceSummary()['total_km'] ?? 0);
             $distances[$entry->pe_id] = $distance;
             $totalDistanceKm += $distance;
+            // Wall-clock minutes from the ranger's actual start to end (an
+            // in-progress patrol counts up to now; a never-started one has
+            // no duration).
+            $duration = $entry->pe_started_at === null
+                ? null
+                : (int) round($entry->pe_started_at->diffInSeconds($entry->pe_ended_at ?? now()) / 60);
+            $durations[$entry->pe_id] = $duration;
+            $totalDurationMinutes += $duration ?? 0;
             $caseCount += $entry->caseReports->count();
             $incidentCount += $entry->incidents->count();
 
             $rangeName = $entry->range?->rn_range_name ?? 'Unassigned';
-            $byRange[$rangeName] ??= ['range' => $rangeName, 'patrols' => 0, 'distance_km' => 0.0, 'cases' => 0, 'incidents' => 0];
+            $byRange[$rangeName] ??= ['range' => $rangeName, 'patrols' => 0, 'distance_km' => 0.0, 'duration_minutes' => 0, 'cases' => 0, 'incidents' => 0];
             $byRange[$rangeName]['patrols']++;
             $byRange[$rangeName]['distance_km'] += $distance;
+            $byRange[$rangeName]['duration_minutes'] += $duration ?? 0;
             $byRange[$rangeName]['cases'] += $entry->caseReports->count();
             $byRange[$rangeName]['incidents'] += $entry->incidents->count();
         }
@@ -380,6 +391,7 @@ class AdminPatrolEntryController extends Controller
         foreach ($entries as $i => $entry) {
             $data[$i]['route_points'] = PatrolRoutePointResource::collection($entry->routePoints)->resolve($request);
             $data[$i]['distance_km'] = round($distances[$entry->pe_id], 3);
+            $data[$i]['duration_minutes'] = $durations[$entry->pe_id];
         }
 
         return response()->json([
@@ -392,6 +404,7 @@ class AdminPatrolEntryController extends Controller
                     'matched_count' => $total,
                     'truncated' => $total > $entries->count(),
                     'total_distance_km' => round($totalDistanceKm, 3),
+                    'total_duration_minutes' => $totalDurationMinutes,
                     'case_count' => $caseCount,
                     'incident_count' => $incidentCount,
                     'by_range' => array_values(array_map(
