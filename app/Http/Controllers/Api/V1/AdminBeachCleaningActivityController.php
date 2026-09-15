@@ -230,6 +230,13 @@ class AdminBeachCleaningActivityController extends Controller
         $validated = $request->validate([
             'destination_id' => ['sometimes', 'uuid'],
             'beach_id' => ['sometimes', 'uuid'],
+            // Multi-select forms of the two above — the report page lets an
+            // admin pick several destinations and/or beaches and get one
+            // combined report. Either form may be sent; they're merged.
+            'destination_ids' => ['sometimes', 'array'],
+            'destination_ids.*' => ['uuid'],
+            'beach_ids' => ['sometimes', 'array'],
+            'beach_ids.*' => ['uuid'],
             'created_by' => ['sometimes', 'uuid'],
             'country_id' => ['sometimes', 'uuid'],
             // Scopes the whole report down to one specific drive — the
@@ -241,11 +248,20 @@ class AdminBeachCleaningActivityController extends Controller
             'date_to' => ['sometimes', 'date'],
         ]);
 
+        $destinationIds = array_values(array_unique(array_filter([
+            $validated['destination_id'] ?? null,
+            ...($validated['destination_ids'] ?? []),
+        ])));
+        $beachIds = array_values(array_unique(array_filter([
+            $validated['beach_id'] ?? null,
+            ...($validated['beach_ids'] ?? []),
+        ])));
+
         $activities = BeachCleaningActivity::query()
             ->with(['segregations.country', 'segregations.wasteCategory'])
             ->when($validated['activity_id'] ?? null, fn ($q, $id) => $q->where('bca_id', $id))
-            ->when($validated['destination_id'] ?? null, fn ($q, $id) => $q->where('bca_destination_id', $id))
-            ->when($validated['beach_id'] ?? null, fn ($q, $id) => $q->where('bca_beach_id', $id))
+            ->when($destinationIds !== [], fn ($q) => $q->whereIn('bca_destination_id', $destinationIds))
+            ->when($beachIds !== [], fn ($q) => $q->whereIn('bca_beach_id', $beachIds))
             ->when($validated['created_by'] ?? null, fn ($q, $id) => $q->where('bca_created_by', $id))
             ->when($validated['date_from'] ?? null, fn ($q, $d) => $q->whereDate('bca_created_at', '>=', $d))
             ->when($validated['date_to'] ?? null, fn ($q, $d) => $q->whereDate('bca_created_at', '<=', $d))
