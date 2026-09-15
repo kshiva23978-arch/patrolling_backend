@@ -239,6 +239,10 @@ class AdminBeachCleaningActivityController extends Controller
             'beach_ids.*' => ['uuid'],
             'created_by' => ['sometimes', 'uuid'],
             'country_id' => ['sometimes', 'uuid'],
+            // Multi-select form of `country_id` (the admin calls these
+            // "origins") — same merge-with-singular treatment as above.
+            'country_ids' => ['sometimes', 'array'],
+            'country_ids.*' => ['uuid'],
             // Scopes the whole report down to one specific drive — the
             // per-activity "Download Report" link on the detail page uses
             // this instead of the other filters, which are for the
@@ -273,9 +277,13 @@ class AdminBeachCleaningActivityController extends Controller
         // itself — a drive can record segregation rows for several
         // countries at once, so the meaningful filter is "only show this
         // country's row", not "only show drives that mention it".
+        $countryIds = array_values(array_unique(array_filter([
+            $validated['country_id'] ?? null,
+            ...($validated['country_ids'] ?? []),
+        ])));
         $countriesQuery = Countries::orderBy('co_created_at');
-        if (! empty($validated['country_id'])) {
-            $countriesQuery->where('co_id', $validated['country_id']);
+        if ($countryIds !== []) {
+            $countriesQuery->whereIn('co_id', $countryIds);
         }
         $countries = $countriesQuery->pluck('co_country_name')->all();
         $categories = WasteCategory::orderBy('wc_created_at')->pluck('wc_name')->all();
