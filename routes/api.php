@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AdminDashboardController;
 use App\Http\Controllers\Api\V1\AdminDestinationAccessController;
 use App\Http\Controllers\Api\V1\AdminPatrolEntryController;
+use App\Http\Controllers\Api\V1\AppVersionController;
 use App\Http\Controllers\Api\V1\AdminRangeAccessController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeachCleaningActivityController;
@@ -43,6 +44,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('throttle:20,1')->prefix('v1')->group(function () {
     Route::post('/admin/login', [AuthController::class, 'adminLogin'])->name('admin.login');
     Route::post('/app/login', [AuthController::class, 'appLogin'])->name('app.login');
+});
+
+// Version policy for the field app — checked on every launch, before login,
+// so it's public (and throttled like the login endpoints).
+Route::middleware('throttle:60,1')->prefix('v1')->group(function () {
+    Route::get('/app/version', [AppVersionController::class, 'show'])->name('app.version');
 });
 
 // Shared "who am I" endpoint — available to any authenticated user regardless of type.
@@ -186,6 +193,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
 
     Route::get('/login-logs', [LoginLogController::class, 'index'])
         ->middleware(['admin.permission:login_logs', 'admin.master']);
+
+    // Field-app version control — master admins only (a wrong minimum
+    // build locks every ranger out until they update).
+    Route::middleware('admin.master')->group(function () {
+        Route::get('/app-versions', [AppVersionController::class, 'index']);
+        Route::put('/app-versions/{platform}', [AppVersionController::class, 'update']);
+    });
 
     Route::middleware('admin.permission:custom_fields')->group(function () {
         Route::get('/custom-fields', [RangeCustomFieldController::class, 'index']);
