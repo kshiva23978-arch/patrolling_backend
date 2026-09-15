@@ -122,6 +122,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'admin'])->prefix('v1/admin')
 
     Route::middleware('admin.permission:patrollings')->group(function () {
         Route::get('/patrol-entries', [AdminPatrolEntryController::class, 'index']);
+        // Static segments before `{entry}` so they aren't swallowed by the model binding.
+        Route::get('/patrol-entries/report', [AdminPatrolEntryController::class, 'report']);
+        Route::get('/patrol-entries/report-options', [AdminPatrolEntryController::class, 'reportOptions']);
         Route::get('/patrol-entries/{entry}', [AdminPatrolEntryController::class, 'show']);
         Route::get('/patrol-entries/{entry}/route-points', [AdminPatrolEntryController::class, 'routePoints']);
         Route::get('/patrol-entries/{entry}/start-selfie', [AdminPatrolEntryController::class, 'startSelfie']);

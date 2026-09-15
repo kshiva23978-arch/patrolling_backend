@@ -224,6 +224,164 @@ class AdminPatrolEntryController extends Controller
     }
 
     /**
+     * Distinct values the admin report page offers in its multi-select
+     * filters — every staff name ever entered on a patrol the calling admin
+     * can see. Ranges come from the ordinary ranges listing; this only
+     * covers what has no master list of its own.
+     */
+    public function reportOptions(Request $request)
+    {
+        $staffNames = PatrollingEntries::query()
+            ->where('pe_type', PatrollingEntries::TYPE_PATROLLING)
+            ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'pe_range_id'))
+            ->whereNotNull('pe_staff_names')
+            ->pluck('pe_staff_names')
+            ->flatten()
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique(fn ($name) => mb_strtolower($name))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Report options retrieved successfully.',
+            'data' => ['staff_names' => $staffNames],
+        ]);
+    }
+
+    /**
+     * The admin "Patrol Report": every patrol matching the filters, each
+     * with its full GPS trail (so the page can plot all of them on one
+     * map), plus roll-up totals. Every filter is a list — nothing selected
+     * means "all" — and `case_recorded` / `incident_recorded` take
+     * `yes`/`no` values so "only patrols that logged a case" and "only
+     * those that didn't" are both expressible.
+     *
+     * Not paginated: a report is generated for a deliberately narrowed
+     * slice (a range and a date window), and the map needs every trail at
+     * once. Capped at [$maxEntries] as a safety net; the response says when
+     * that cap was hit so the page can ask for a narrower filter.
+     */
+    public function report(Request $request)
+    {
+        $validated = $request->validate([
+            'range_ids' => ['sometimes', 'array'],
+            'range_ids.*' => ['uuid'],
+            'staff_names' => ['sometimes', 'array'],
+            'staff_names.*' => ['string', 'max:150'],
+            'case_recorded' => ['sometimes', 'array'],
+            'case_recorded.*' => [Rule::in(['yes', 'no'])],
+            'incident_recorded' => ['sometimes', 'array'],
+            'incident_recorded.*' => [Rule::in(['yes', 'no'])],
+            'status' => ['sometimes', 'array'],
+            'status.*' => [Rule::in(['pending', 'in_progress', 'completed'])],
+            'date_from' => ['sometimes', 'date'],
+            'date_to' => ['sometimes', 'date', 'after_or_equal:date_from'],
+        ]);
+
+        $rangeIds = array_values(array_unique($validated['range_ids'] ?? []));
+        foreach ($rangeIds as $rangeId) {
+            $this->assertRangeAccessible($request, $rangeId);
+        }
+
+        // A yes/no multi-select with both (or neither) chosen is no filter.
+        $yesNo = function (array $values): ?bool {
+            $values = array_values(array_unique($values));
+
+            return count($values) === 1 ? $values[0] === 'yes' : null;
+        };
+        $caseRecorded = $yesNo($validated['case_recorded'] ?? []);
+        $incidentRecorded = $yesNo($validated['incident_recorded'] ?? []);
+        $staffNames = array_values(array_filter(array_map('trim', $validated['staff_names'] ?? [])));
+
+        $maxEntries = 300;
+
+        $query = PatrollingEntries::query()
+            ->where('pe_type', PatrollingEntries::TYPE_PATROLLING)
+            ->with([
+                'range', 'beat', 'patrolType', 'modes', 'vehicles.vehicle',
+                'patrolLeader.details', 'caseReports.media', 'incidents.media',
+                'routePoints.vehicle',
+            ])
+            ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'pe_range_id'))
+            ->when($rangeIds !== [], fn ($q) => $q->whereIn('pe_range_id', $rangeIds))
+            ->when(! empty($validated['status']), fn ($q) => $q->whereIn('pe_status', $validated['status']))
+            ->when($validated['date_from'] ?? null, fn ($q, $d) => $q->whereDate('pe_patrol_date', '>=', $d))
+            ->when($validated['date_to'] ?? null, fn ($q, $d) => $q->whereDate('pe_patrol_date', '<=', $d))
+            ->when($caseRecorded === true, fn ($q) => $q->whereHas('caseReports'))
+            ->when($caseRecorded === false, fn ($q) => $q->whereDoesntHave('caseReports'))
+            ->when($incidentRecorded === true, fn ($q) => $q->whereHas('incidents'))
+            ->when($incidentRecorded === false, fn ($q) => $q->whereDoesntHave('incidents'))
+            // "Any of the selected staff was deployed" — `pe_staff_names` is
+            // a JSON array of free-typed names, matched case-insensitively.
+            ->when($staffNames !== [], function ($q) use ($staffNames) {
+                $q->where(function ($inner) use ($staffNames) {
+                    foreach ($staffNames as $name) {
+                        $inner->orWhereRaw(
+                            'EXISTS (SELECT 1 FROM jsonb_array_elements_text(pe_staff_names::jsonb) AS n WHERE lower(n) = ?)',
+                            [mb_strtolower($name)],
+                        );
+                    }
+                });
+            });
+
+        $total = (clone $query)->count();
+        $entries = $query
+            ->orderBy('pe_patrol_date')
+            ->orderBy('pe_start_time')
+            ->limit($maxEntries)
+            ->get();
+
+        $totalDistanceKm = 0.0;
+        $caseCount = 0;
+        $incidentCount = 0;
+        $byRange = [];
+        $distances = [];
+        foreach ($entries as $entry) {
+            $distance = (float) ($entry->distanceSummary()['total_km'] ?? 0);
+            $distances[$entry->pe_id] = $distance;
+            $totalDistanceKm += $distance;
+            $caseCount += $entry->caseReports->count();
+            $incidentCount += $entry->incidents->count();
+
+            $rangeName = $entry->range?->rn_range_name ?? 'Unassigned';
+            $byRange[$rangeName] ??= ['range' => $rangeName, 'patrols' => 0, 'distance_km' => 0.0, 'cases' => 0, 'incidents' => 0];
+            $byRange[$rangeName]['patrols']++;
+            $byRange[$rangeName]['distance_km'] += $distance;
+            $byRange[$rangeName]['cases'] += $entry->caseReports->count();
+            $byRange[$rangeName]['incidents'] += $entry->incidents->count();
+        }
+        ksort($byRange, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $data = AdminPatrolEntryResource::collection($entries)->resolve($request);
+        foreach ($entries as $i => $entry) {
+            $data[$i]['route_points'] = PatrolRoutePointResource::collection($entry->routePoints)->resolve($request);
+            $data[$i]['distance_km'] = round($distances[$entry->pe_id], 3);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Patrol report generated successfully.',
+            'data' => [
+                'entries' => $data,
+                'summary' => [
+                    'patrol_count' => $entries->count(),
+                    'matched_count' => $total,
+                    'truncated' => $total > $entries->count(),
+                    'total_distance_km' => round($totalDistanceKm, 3),
+                    'case_count' => $caseCount,
+                    'incident_count' => $incidentCount,
+                    'by_range' => array_values(array_map(
+                        fn ($row) => [...$row, 'distance_km' => round($row['distance_km'], 3)],
+                        $byRange,
+                    )),
+                ],
+            ],
+        ]);
+    }
+
+    /**
      * The entry's GPS trail, oldest first. Pass `since` (an ISO timestamp)
      * to fetch only points recorded after it — what the live-tracking map
      * polls on an interval instead of re-fetching the whole trail.
