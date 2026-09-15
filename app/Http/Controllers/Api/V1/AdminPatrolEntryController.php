@@ -226,27 +226,49 @@ class AdminPatrolEntryController extends Controller
     /**
      * Distinct values the admin report page offers in its multi-select
      * filters — every staff name ever entered on a patrol the calling admin
-     * can see. Ranges come from the ordinary ranges listing; this only
-     * covers what has no master list of its own.
+     * can see, each with the range(s) it was deployed in, so the page can
+     * narrow the list to the ranges currently selected and label each name
+     * with its range. Names are unique case-insensitively (free-typed, so
+     * "Suresh" and "suresh" are one person); a name deployed in several
+     * ranges lists all of them.
      */
     public function reportOptions(Request $request)
     {
-        $staffNames = PatrollingEntries::query()
+        $rows = PatrollingEntries::query()
             ->where('pe_type', PatrollingEntries::TYPE_PATROLLING)
             ->tap(fn ($q) => $this->scopeToAccessibleRanges($q, $request, 'pe_range_id'))
             ->whereNotNull('pe_staff_names')
-            ->pluck('pe_staff_names')
-            ->flatten()
-            ->map(fn ($name) => trim((string) $name))
-            ->filter()
-            ->unique(fn ($name) => mb_strtolower($name))
-            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
+            ->with('range')
+            ->get(['pe_id', 'pe_range_id', 'pe_staff_names']);
+
+        $staff = [];
+        foreach ($rows as $row) {
+            foreach ((array) $row->pe_staff_names as $raw) {
+                $name = trim((string) $raw);
+                if ($name === '') {
+                    continue;
+                }
+                $key = mb_strtolower($name);
+                $staff[$key] ??= ['name' => $name, 'ranges' => []];
+                if ($row->pe_range_id !== null) {
+                    $staff[$key]['ranges'][$row->pe_range_id] = [
+                        'id' => $row->pe_range_id,
+                        'name' => $row->range?->rn_range_name ?? 'Unknown range',
+                    ];
+                }
+            }
+        }
+        uksort($staff, fn ($a, $b) => strnatcasecmp($a, $b));
 
         return response()->json([
             'success' => true,
             'message' => 'Report options retrieved successfully.',
-            'data' => ['staff_names' => $staffNames],
+            'data' => [
+                'staff' => array_values(array_map(
+                    fn ($s) => ['name' => $s['name'], 'ranges' => array_values($s['ranges'])],
+                    $staff,
+                )),
+            ],
         ]);
     }
 
