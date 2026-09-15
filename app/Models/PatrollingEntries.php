@@ -162,7 +162,11 @@ class PatrollingEntries extends Model
     public function routePoints(): HasMany
     {
         return $this->hasMany(PatrolRoutePoints::class, 'prp_entry_id', 'pe_id')
-            ->orderBy('prp_recorded_at');
+            // Tiebreak on id: `prp_recorded_at` is second-resolution, so a
+            // burst of backlog pings can share a timestamp — without this the
+            // DB returns those in arbitrary order and the trail zigzags.
+            ->orderBy('prp_recorded_at')
+            ->orderBy('prp_id');
     }
 
     /**
@@ -186,7 +190,7 @@ class PatrollingEntries extends Model
             FROM (
                 SELECT
                     COALESCE(prp_travel_mode, \'unknown\') AS travel_mode,
-                    ST_Distance(prp_location, LAG(prp_location) OVER (ORDER BY prp_recorded_at)) AS segment_m
+                    ST_Distance(prp_location, LAG(prp_location) OVER (ORDER BY prp_recorded_at, prp_id)) AS segment_m
                 FROM patrol_route_points
                 WHERE prp_entry_id = ?
             ) segments

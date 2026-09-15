@@ -224,7 +224,7 @@ class PatrolEntryController extends Controller
             abort(403, 'You do not have access to this patrol entry.');
         }
 
-        $points = $entry->routePoints()->with('vehicle')->orderBy('prp_recorded_at')->get();
+        $points = $entry->routePoints()->with('vehicle')->orderBy('prp_recorded_at')->orderBy('prp_id')->get();
 
         return response()->json([
             'success' => true,

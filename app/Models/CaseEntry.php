@@ -116,7 +116,7 @@ class CaseEntry extends Model
 
     public function routePoints(): HasMany
     {
-        return $this->hasMany(CaseEntryRoutePoint::class, 'cerp_case_id', 'ce_id')->orderBy('cerp_recorded_at');
+        return $this->hasMany(CaseEntryRoutePoint::class, 'cerp_case_id', 'ce_id')->orderBy('cerp_recorded_at')->orderBy('cerp_id');
     }
 
     public function incidents(): HasMany

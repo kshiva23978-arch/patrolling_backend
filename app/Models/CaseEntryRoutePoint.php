@@ -23,10 +23,17 @@ class CaseEntryRoutePoint extends Model
 
     public $timestamps = false;
 
+    // Keep the microseconds the app sends in `recorded_at` (Laravel's
+    // default 'Y-m-d H:i:s' would silently drop them on write, collapsing
+    // a burst of backlog pings onto the same second and losing their order).
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected static function booted(): void
     {
         static::creating(function (self $point): void {
-            $point->cerp_id ??= (string) Str::uuid();
+            // Time-ordered so an `ORDER BY cerp_id` tiebreak follows insertion
+            // order rather than random v4 bytes.
+            $point->cerp_id ??= (string) Str::orderedUuid();
         });
     }
 

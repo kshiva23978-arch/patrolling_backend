@@ -243,6 +243,7 @@ class AdminPatrolEntryController extends Controller
                 fn ($query, $since) => $query->where('prp_recorded_at', '>', $since)
             )
             ->orderBy('prp_recorded_at')
+            ->orderBy('prp_id')
             ->get();
 
         return response()->json([

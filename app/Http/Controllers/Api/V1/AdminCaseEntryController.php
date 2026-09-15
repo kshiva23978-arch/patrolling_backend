@@ -99,6 +99,7 @@ class AdminCaseEntryController extends Controller
                 fn ($query, $since) => $query->where('cerp_recorded_at', '>', $since)
             )
             ->orderBy('cerp_recorded_at')
+            ->orderBy('cerp_id')
             ->get();
 
         return response()->json([

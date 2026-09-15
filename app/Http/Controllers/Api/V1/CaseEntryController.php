@@ -211,7 +211,7 @@ class CaseEntryController extends Controller
             abort(403, 'You do not have access to this case.');
         }
 
-        $points = $case->routePoints()->with('vehicle')->orderBy('cerp_recorded_at')->get();
+        $points = $case->routePoints()->with('vehicle')->orderBy('cerp_recorded_at')->orderBy('cerp_id')->get();
 
         return response()->json([
             'success' => true,
