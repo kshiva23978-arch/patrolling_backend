@@ -209,7 +209,10 @@ class PatrollingEntries extends Model
 
         return [
             'total_km' => round($totalKm, 3),
-            'by_mode' => $byMode,
+            // Cast so an entry with no distance yet serialises as `{}` — a
+            // bare empty PHP array becomes JSON `[]`, which the app's
+            // `PatrolDistanceSummary.fromJson` can't read as a map.
+            'by_mode' => (object) $byMode,
         ];
     }
 }
